@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/guide.css">
+<link rel="stylesheet" href="../assets/modal.css">
 </head>
 <body data-lang="en">
 <canvas id="stars" aria-hidden="true"></canvas>
@@ -19,7 +20,7 @@
     <a href="../create-account/"><span class="en">Create an account</span><span class="ru">Создать аккаунт</span></a>
   </nav>
   <div class="right">
-    <a class="login" href="../login/"><span class="en">Sign in</span><span class="ru">Войти</span></a>
+    <button class="login" type="button" data-open-login><span class="en">Sign in</span><span class="ru">Войти</span></button>
     <button class="lang" id="lang" type="button">RU</button>
   </div>
 </header>
@@ -93,5 +94,7 @@
   </div>
 </main>
 <script src="../assets/site.js"></script>
+<script src="../assets/config.js"></script>
+<script src="../assets/auth.js"></script>
 </body>
 </html>

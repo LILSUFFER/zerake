@@ -1,0 +1,47 @@
+.zmodal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; }
+.zmodal[hidden] { display: none; }
+.zbackdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); }
+.zdialog {
+  position: relative; width: 100%; max-width: 400px;
+  background: var(--card, #1a1a1a); border: 1px solid var(--line, #2c2c2c); border-radius: 24px;
+  padding: 32px 24px 24px; text-align: center;
+  font: 400 16px/1.5 Geist, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--fg, #fafafa);
+  animation: zpop .18s ease-out;
+}
+@keyframes zpop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.zclose {
+  position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line, #2c2c2c); background: var(--card-2, #212121); color: var(--fg-soft, #9a9a9a);
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.zclose:hover { color: var(--fg, #fafafa); }
+.zdialog h2 { margin: 0; font-size: 26px; font-weight: 500; letter-spacing: -0.02em; }
+.zdialog .zsub { margin: 8px 0 22px; color: var(--fg-soft, #9a9a9a); font-size: 15px; }
+.zbtns { display: grid; gap: 10px; }
+.zbtn {
+  display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;
+  font: 500 16px/1 Geist, sans-serif; padding: 15px 20px; border-radius: 100px; cursor: pointer; border: 1px solid transparent;
+}
+.zbtn svg { flex: none; }
+.zbtn.google { background: #fff; color: #1f1f1f; }
+.zbtn.google:hover { background: #f1f1f1; }
+.zbtn.telegram { background: #27a7e7; color: #fff; }
+.zbtn.telegram:hover { background: #2096d1; }
+.zbtn.plain { background: var(--card-2, #212121); color: var(--fg, #fafafa); border-color: var(--line, #2c2c2c); }
+.zbtn.save { background: var(--fg, #fafafa); color: #141414; }
+.zfoot { margin: 18px 0 0; color: var(--fg-soft, #9a9a9a); font-size: 13px; }
+.znote { margin: 14px 0 0; border-radius: 14px; padding: 12px 14px; font-size: 14px; background: var(--green-bg, rgba(15,185,131,.12)); color: var(--green, #0fb983); }
+.znote.bad { background: rgba(245,104,104,.12); color: #f56868; }
+.znote[hidden] { display: none; }
+.zwho { margin: 8px 0 20px; color: var(--fg-soft, #9a9a9a); font-size: 15px; word-break: break-all; }
+.zwho b { color: var(--fg, #fafafa); font-weight: 500; }
+.zform { display: grid; gap: 10px; text-align: left; }
+.zform label { color: var(--fg-soft, #9a9a9a); font-size: 14px; }
+.zform input {
+  font: 500 22px/1 Geist, sans-serif; letter-spacing: .04em; color: var(--fg, #fafafa);
+  background: var(--card-2, #212121); border: 1px solid var(--line, #2c2c2c); border-radius: 16px; padding: 16px 18px; width: 100%;
+}
+.zform input:focus { outline: none; border-color: var(--green, #0fb983); }
+.zmodal [data-lang] .ru { display: none; }
+body[data-lang="ru"] .zmodal .ru { display: inline; }
+body[data-lang="ru"] .zmodal .en { display: none; }

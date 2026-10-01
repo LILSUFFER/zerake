@@ -24,7 +24,7 @@ header {
 .login {
   font: 500 14px/1 Geist, sans-serif; text-decoration: none;
   background: var(--fg); color: #141414; border: 1px solid var(--fg);
-  border-radius: 100px; padding: 11px 20px;
+  border-radius: 100px; padding: 11px 20px; cursor: pointer;
 }
 .login:hover { background: #fff; }
 .lang {

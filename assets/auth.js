@@ -95,7 +95,11 @@
   loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2').then(function () {
     sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
 
-    $('zg').addEventListener('click', function () {
+    $('zg').addEventListener('click', async function () {
+      try {
+        var st = await (await fetch(C.supabaseUrl + '/auth/v1/settings', { headers: { apikey: C.supabaseAnonKey } })).json();
+        if (!st.external || !st.external.google) { notReady(); return; }
+      } catch (e) { notReady(); return; }
       sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
     });
 

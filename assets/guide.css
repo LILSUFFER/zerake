@@ -17,6 +17,16 @@ header {
   background: rgba(20,20,20,0.85); backdrop-filter: blur(8px);
 }
 .home { font-weight: 500; font-size: 18px; text-decoration: none; letter-spacing: -0.02em; }
+.nav { display: flex; gap: 26px; }
+.nav a { color: var(--fg-soft); text-decoration: none; font-size: 14px; font-weight: 500; }
+.nav a:hover { color: var(--fg); }
+.right { display: flex; align-items: center; gap: 10px; }
+.login {
+  font: 500 14px/1 Geist, sans-serif; text-decoration: none;
+  background: var(--fg); color: #141414; border: 1px solid var(--fg);
+  border-radius: 100px; padding: 11px 20px;
+}
+.login:hover { background: #fff; }
 .lang {
   font: 500 14px/1 Geist, sans-serif; color: var(--fg);
   background: var(--card-2); border: 1px solid var(--line);
@@ -92,4 +102,5 @@ ol.steps code {
 .note.bad { background: rgba(245,104,104,0.12); color: #f56868; }
 
 [data-lang="en"] .ru, [data-lang="ru"] .en { display: none !important; }
+@media (max-width: 640px) { .nav { display: none; } }
 @media (max-width: 480px) { header { padding: 0 16px; } ol.steps li { padding-left: 58px; } .idbox b { font-size: 24px; } }

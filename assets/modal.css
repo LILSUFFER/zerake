@@ -45,3 +45,52 @@
 .zmodal [data-lang] .ru { display: none; }
 body[data-lang="ru"] .zmodal .ru { display: inline; }
 body[data-lang="ru"] .zmodal .en { display: none; }
+
+
+/* header button when signed in */
+.login.logged { display: inline-flex; align-items: center; gap: 8px; }
+.login .zname { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* account drop-down */
+.zmenu {
+  position: fixed; z-index: 90; width: min(320px, calc(100vw - 24px));
+  background: var(--card, #1a1a1a); border: 1px solid var(--line, #2c2c2c); border-radius: 20px; padding: 8px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.5); color: var(--fg, #fafafa);
+  font: 400 15px/1.45 Geist, -apple-system, "Segoe UI", Roboto, sans-serif; animation: zpop .15s ease-out;
+}
+.zmenu[hidden] { display: none; }
+.zmhead { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; }
+.zav { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 500;
+  background: var(--green-bg, rgba(15,185,131,.12)); color: var(--green, #0fb983); }
+.zmwho { min-width: 0; }
+.zmwho small { display: block; color: var(--fg-soft, #9a9a9a); font-size: 12px; }
+.zmwho b { font-weight: 500; word-break: break-all; }
+.zsep { height: 1px; background: var(--line, #2c2c2c); margin: 4px 0; }
+.zblock { padding: 10px; }
+.zlabel { color: var(--fg-soft, #9a9a9a); font-size: 13px; margin-bottom: 6px; }
+.zidview { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.zidtext { font-size: 22px; font-weight: 500; letter-spacing: .03em; color: var(--green, #0fb983); }
+.zlink { background: none; border: 0; color: var(--fg-soft, #9a9a9a); font: 500 14px Geist, sans-serif; text-decoration: underline; cursor: pointer; padding: 4px; }
+.zlink:hover { color: var(--fg, #fafafa); }
+.zidform { display: grid; gap: 8px; }
+.zidform input {
+  font: 500 20px/1 Geist, sans-serif; letter-spacing: .04em; color: var(--fg, #fafafa);
+  background: var(--card-2, #212121); border: 1px solid var(--line, #2c2c2c); border-radius: 14px; padding: 14px 16px; width: 100%;
+}
+.zidform input:focus { outline: none; border-color: var(--green, #0fb983); }
+.zrow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.zrow2 .zbtn { padding: 12px 14px; font-size: 15px; }
+.zdet { margin-top: 12px; font-size: 13px; color: var(--fg-soft, #9a9a9a); }
+.zdet summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+.zdet summary::-webkit-details-marker { display: none; }
+.zdet summary::after { content: "+"; font-size: 16px; }
+.zdet[open] summary::after { content: "2"; }
+.zdet ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.zdet b { color: var(--fg, #fafafa); font-weight: 500; }
+.zmenu .znote { margin-top: 10px; font-size: 13px; padding: 10px 12px; }
+.zitem { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--fg, #fafafa);
+  font: 500 15px Geist, sans-serif; padding: 12px 10px; border-radius: 12px; cursor: pointer; }
+.zitem:hover { background: var(--card-2, #212121); }
+.zitem.danger { color: #f56868; }
+
+.zmenu [hidden] { display: none !important; }

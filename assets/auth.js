@@ -102,14 +102,14 @@
     $('zt-btn').addEventListener('click', async function () {
       if (!C.telegramBotId) { notReady(); return; }
       try {
-        if (!window.Telegram || !window.Telegram.Login) await loadScript('https://telegram.org/js/telegram-widget.js?22');
-        window.Telegram.Login.auth({ bot_id: C.telegramBotId, request_access: 'write' }, async function (user) {
-          if (!user) return;
+        if (!window.Telegram || !window.Telegram.Login) await loadScript('https://oauth.telegram.org/js/telegram-login.js?6');
+        window.Telegram.Login.auth({ client_id: C.telegramBotId, scope: ['profile'] }, async function (data) {
+          if (!data || data.error || !data.id_token) return;
           try {
             var r = await fetch(C.supabaseUrl + '/functions/v1/telegram-auth', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + C.supabaseAnonKey },
-              body: JSON.stringify(user)
+              body: JSON.stringify({ id_token: data.id_token })
             });
             var d = await r.json();
             if (!r.ok || !d.token_hash) throw new Error('telegram');

@@ -3,5 +3,5 @@
 window.ZERAKE = {
   supabaseUrl: "",      // e.g. https://abcdxyz.supabase.co
   supabaseAnonKey: "",  // Project Settings -> API -> anon public key
-  telegramBotId: 0      // numeric bot id: the digits before the colon in the bot token, e.g. 123456789
+  telegramBotId: 8866366556  // Telegram Client ID from BotFather (public)
 };

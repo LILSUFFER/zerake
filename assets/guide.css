@@ -1,0 +1,79 @@
+:root {
+  --bg: #141414; --card: #1a1a1a; --card-2: #212121; --line: #2c2c2c;
+  --fg: #fafafa; --fg-soft: #9a9a9a; --green: #0fb983; --green-bg: rgba(15,185,131,0.12);
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 16px/1.55 Geist, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+header {
+  position: fixed; inset: 0 0 auto 0; z-index: 10; height: 72px; padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(20,20,20,0.85); backdrop-filter: blur(8px);
+}
+.home { font-weight: 500; font-size: 18px; text-decoration: none; letter-spacing: -0.02em; }
+.lang {
+  font: 500 14px/1 Geist, sans-serif; color: var(--fg);
+  background: var(--card-2); border: 1px solid var(--line);
+  border-radius: 100px; padding: 11px 18px; cursor: pointer;
+}
+.lang:hover { border-color: #3f3f3f; }
+
+main { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: 112px 16px 72px; }
+h1 { margin: 0; font-size: clamp(34px, 7vw, 52px); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+.lead { margin: 14px 0 0; color: var(--fg-soft); }
+
+.idbox {
+  margin-top: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 14px 14px 14px 20px;
+}
+.idbox small { display: block; color: var(--fg-soft); font-size: 13px; }
+.idbox b { font-size: 28px; font-weight: 500; letter-spacing: 0.02em; color: var(--green); }
+.copy {
+  font: 500 14px/1 Geist, sans-serif; color: var(--fg); background: var(--card-2);
+  border: 1px solid var(--line); border-radius: 100px; padding: 11px 18px; cursor: pointer;
+}
+.copy:hover { border-color: #3f3f3f; }
+
+ol.steps { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 10px; counter-reset: s; }
+ol.steps li {
+  counter-increment: s; position: relative;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px 20px 20px 64px;
+}
+ol.steps li::before {
+  content: counter(s); position: absolute; left: 20px; top: 20px; width: 28px; height: 28px;
+  border-radius: 50%; background: var(--green-bg); color: var(--green);
+  display: grid; place-items: center; font-size: 14px; font-weight: 500;
+}
+ol.steps h2 { margin: 0; font-size: 17px; font-weight: 500; }
+ol.steps p { margin: 6px 0 0; color: var(--fg-soft); font-size: 15px; }
+ol.steps code {
+  font: 500 14px/1 ui-monospace, Consolas, monospace; background: var(--card-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 2px 7px; color: var(--fg);
+}
+.note {
+  margin-top: 10px; background: var(--green-bg); color: var(--green);
+  border-radius: 14px; padding: 12px 16px; font-size: 14px;
+}
+.warn {
+  margin-top: 24px; border: 1px solid var(--line); border-radius: 20px; padding: 16px 20px;
+  color: var(--fg-soft); font-size: 14px;
+}
+.warn b { color: var(--fg); font-weight: 500; }
+.next {
+  margin-top: 28px; display: flex; gap: 10px; flex-wrap: wrap;
+}
+.btn {
+  display: inline-block; text-decoration: none; padding: 14px 26px; border-radius: 100px;
+  font: 500 16px/1 Geist, sans-serif; border: 1px solid var(--line); background: var(--card-2); color: var(--fg);
+}
+.btn.primary { background: var(--fg); color: #141414; border-color: var(--fg); }
+.btn:hover { border-color: #3f3f3f; }
+
+[data-lang="en"] .ru, [data-lang="ru"] .en { display: none !important; }
+@media (max-width: 480px) { header { padding: 0 16px; } ol.steps li { padding-left: 58px; } .idbox b { font-size: 24px; } }

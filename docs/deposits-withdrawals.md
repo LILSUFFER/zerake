@@ -4,7 +4,7 @@
 
 Все пополнения проходят через ID пользователя в ClubGG. ID выглядит так: **33833619**.
 
-Каждое пополнение привязано к вашему аккаунту. Мошенник не сможет вывести ваши фишки через другие источники: так работает GGPoker, и так же работаем мы.
+Каждое пополнение привязано к вашему аккаунту. Мошенник не сможет вывести ваши фишки через другие источники: так устроена сеть GG, и так же работаем мы.
 
 ## Слабые места пользователя
 
@@ -22,7 +22,7 @@
 
 All deposits go through your ClubGG user ID, which looks like this: **33833619**.
 
-Every deposit is tied to your account. A scammer cannot withdraw your chips through other channels: this is how GGPoker works, and this is how we work.
+Every deposit is tied to your account. A scammer cannot withdraw your chips through other channels: this is how the GG network works, and this is how we work.
 
 ## Your weak spot
 

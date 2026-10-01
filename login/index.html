@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Zerake</title>
+<meta name="description" content="Sign in to Zerake with Google or Telegram and add your ClubGG ID.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/guide.css">
+</head>
+<body data-lang="en">
+<canvas id="stars" aria-hidden="true"></canvas>
+<header>
+  <a class="home" href="../">Zerake</a>
+  <button class="lang" id="lang" type="button">RU</button>
+</header>
+
+<main>
+  <h1><span class="en">Sign in</span><span class="ru">Вход</span></h1>
+  <p class="lead">
+    <span class="en">Sign in with Google or Telegram, then add your ClubGG ID.</span>
+    <span class="ru">Войдите через Google или Telegram и добавьте свой ID в ClubGG.</span>
+  </p>
+
+  <div id="notready" class="note" hidden>
+    <span class="en">Sign-in is being set up and will be available soon.</span>
+    <span class="ru">Вход настраивается и скоро будет доступен.</span>
+  </div>
+
+  <section id="signin" class="panel" hidden>
+    <button id="google" class="btn primary" type="button"><span class="en">Continue with Google</span><span class="ru">Продолжить с Google</span></button>
+    <div id="tg" class="tg"></div>
+  </section>
+
+  <section id="account" class="panel" hidden>
+    <div class="idbox">
+      <div>
+        <small><span class="en">Signed in as</span><span class="ru">Вы вошли как</span></small>
+        <b id="who" class="who"></b>
+      </div>
+      <button id="signout" class="copy" type="button"><span class="en">Sign out</span><span class="ru">Выйти</span></button>
+    </div>
+    <form id="idform" class="idform">
+      <label for="ggid"><span class="en">Your ClubGG ID</span><span class="ru">Ваш ID в ClubGG</span></label>
+      <input id="ggid" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="12345678">
+      <button class="btn primary" type="submit"><span class="en">Save</span><span class="ru">Сохранить</span></button>
+    </form>
+  </section>
+
+  <p id="msg" class="note" hidden></p>
+
+  <div class="warn">
+    <span class="en"><b>Check your ID.</b> Money and chips go to the ID you enter, so make sure it is correct. We never ask for your ClubGG password.</span>
+    <span class="ru"><b>Проверьте ID.</b> Деньги и фишки идут на указанный ID, поэтому убедитесь, что он верный. Мы никогда не просим пароль от ClubGG.</span>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/config.js"></script>
+<script src="../assets/site.js"></script>
+<script src="../assets/auth.js"></script>
+</body>
+</html>

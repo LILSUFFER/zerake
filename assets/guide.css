@@ -75,5 +75,21 @@ ol.steps code {
 .btn.primary { background: var(--fg); color: #141414; border-color: var(--fg); }
 .btn:hover { border-color: #3f3f3f; }
 
+.panel { margin-top: 28px; display: grid; gap: 14px; justify-items: start; }
+.panel[hidden], .note[hidden] { display: none; }
+.panel .idbox { margin-top: 0; width: 100%; }
+.tg { min-height: 40px; }
+.who { font-size: 20px; font-weight: 500; word-break: break-all; }
+.idform { width: 100%; display: grid; gap: 10px; }
+.idform label { color: var(--fg-soft); font-size: 14px; }
+.idform input {
+  font: 500 22px/1 Geist, sans-serif; letter-spacing: 0.04em; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; width: 100%;
+}
+.idform input:focus { outline: none; border-color: var(--green); }
+.idform .btn { justify-self: start; cursor: pointer; }
+.btn { cursor: pointer; }
+.note.bad { background: rgba(245,104,104,0.12); color: #f56868; }
+
 [data-lang="en"] .ru, [data-lang="ru"] .en { display: none !important; }
 @media (max-width: 480px) { header { padding: 0 16px; } ol.steps li { padding-left: 58px; } .idbox b { font-size: 24px; } }

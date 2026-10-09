@@ -98,7 +98,7 @@
   async function loadProfile() {
     var r = await sb.from('profiles').select('gg_id').eq('user_id', me.id).maybeSingle();
     ggId = (r.data && r.data.gg_id) || '';
-    $('dep-id').textContent = $('dep-id2').textContent = $('wd-id').textContent = ggId ? fid(ggId) : '—';
+    $('dep-id2').textContent = $('wd-id').textContent = ggId ? fid(ggId) : '—';
     $('noid').hidden = !!ggId;
     $('wsubmit').disabled = !ggId;
   }

@@ -112,6 +112,11 @@ Deno.serve(async (req: Request) => {
   const profile = (await admin.from("profiles").select("gg_id").eq("user_id", u.user.id).maybeSingle()).data;
   if (!profile?.gg_id) return out({ error: "no clubgg id" }, 400, h);
 
+  // 0) A wallet change is waiting (48 h with the code, 7 days through support): cash outs are frozen.
+  await admin.rpc("apply_wallet_changes");
+  const pendingChange = (await admin.from("wallet_changes").select("effective_at").eq("user_id", u.user.id).eq("status", "pending").limit(1)).data ?? [];
+  if (pendingChange.length) return out({ error: "wallet change pending", until: pendingChange[0].effective_at }, 423, h);
+
   // 1) Only to the wallet the player bound for this chain (players cannot add or change wallets).
   const chain = CHAIN_OF[network];
   const bound = (await admin.from("player_wallets").select("address").eq("user_id", u.user.id).eq("chain", chain).maybeSingle()).data;

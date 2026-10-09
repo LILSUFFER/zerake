@@ -179,12 +179,73 @@
       var wc = bin.charCodeAt(1); return tonFriendly((wc > 127 ? wc - 256 : wc) + ':' + hex);
     } catch (e) { return a; }
   }
+  var pending = [], hasCode = true;
+  async function walletCall(body) {
+    var ses = (await sb.auth.getSession()).data.session;
+    var r = await fetch(C.supabaseUrl + '/functions/v1/wallet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
+      body: JSON.stringify(body)
+    });
+    var d = {}; try { d = await r.json(); } catch (e) {}
+    return { ok: r.ok, status: r.status, data: d };
+  }
+  function takeState(d) {
+    if (!d || !d.wallets) return;
+    wallets = d.wallets; pending = d.pending || []; hasCode = !!d.has_code; walletsLoaded = true;
+    applyWallet(); paintPending();
+    if (d.code) showCode(d.code);
+  }
   async function loadWallets() {
     if (!me) return;
-    var r = await sb.from('player_wallets').select('chain,address').eq('user_id', me.id);
-    wallets = {}; (r.data || []).forEach(function (w) { wallets[w.chain] = w.address; });
-    walletsLoaded = true; applyWallet();
+    var r = await walletCall({ action: 'status' });
+    if (r.ok) takeState(r.data);
   }
+  function paintPending() {
+    var p = pending[0];
+    $('pendbox').hidden = !p;
+    if (p) {
+      var when = new Date(p.effective_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' });
+      $('pendtext').innerHTML = bi(CHAIN_NAME[p.chain] + ': <code>' + shortAddr(p.old_address) + '</code> → <code>' + shortAddr(p.new_address) + '</code>.<br>Takes effect on <b>' + when + '</b>. Cash outs are frozen until then. If it was not you, cancel it.',
+        CHAIN_NAME[p.chain] + ': <code>' + shortAddr(p.old_address) + '</code> → <code>' + shortAddr(p.new_address) + '</code>.<br>Вступит в силу <b>' + when + '</b>. До этого выводы заморожены. Если это не вы — отмените.');
+    }
+    $('nocode').hidden = hasCode || !Object.keys(wallets).length;
+  }
+  function showCode(code) {
+    $('codetext').textContent = code; $('codeok').checked = false; $('codedone').disabled = true; $('codebox').hidden = false;
+    try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {}
+  }
+  $('codeok').addEventListener('change', function () { $('codedone').disabled = !$('codeok').checked; });
+  $('codedone').addEventListener('click', function () { $('codebox').hidden = true; $('codetext').textContent = '—'; });
+  $('pendcancel').addEventListener('click', function () {
+    ask('Cancel the wallet change?', 'Отменить смену кошелька?', async function () {
+      var r = await walletCall({ action: 'cancel' }); if (r.ok) { haptic('success'); takeState(r.data); }
+    });
+  });
+  $('newcodebtn').addEventListener('click', async function () {
+    var r = await walletCall({ action: 'newcode' }); if (r.ok) takeState(r.data);
+  });
+  $('chgopen').addEventListener('click', function () { $('chgform').hidden = !$('chgform').hidden; $('chgaddr').placeholder = PLACEHOLDER[net]; });
+  $('chgbtn').addEventListener('click', function () {
+    var m = $('chgmsg'); m.hidden = true;
+    var a = $('chgaddr').value.trim(); if (net === 'TON' || net === 'GRAM') a = tonNormalize(a);
+    var code = $('chgcode').value.trim();
+    var bad = function (en, ru) { m.className = 'note bad'; m.innerHTML = bi(en, ru); m.hidden = false; haptic('error'); };
+    if (!ADDR_RE[net].test(a)) return bad(ADDR_HINT[net][0], ADDR_HINT[net][1]);
+    if (code.replace(/[^0-9A-Za-z]/g, '').length !== 12) return bad('Enter the 12-character recovery code.', 'Введите код восстановления из 12 символов.');
+    ask('Change the wallet to ' + a + '? It takes effect in 48 hours.', 'Сменить кошелёк на ' + a + '? Смена вступит в силу через 48 часов.', async function () {
+      $('chgbtn').disabled = true;
+      var r = await walletCall({ action: 'change', chain: CHAIN_OF[net], address: a, code: code });
+      $('chgbtn').disabled = false;
+      if (r.ok) { haptic('success'); $('chgaddr').value = ''; $('chgcode').value = ''; $('chgform').hidden = true; takeState(r.data); return; }
+      var e = r.data.error;
+      if (e === 'wrong code') bad('Wrong code. Attempts left today: ' + r.data.left + '.', 'Неверный код. Осталось попыток на сегодня: ' + r.data.left + '.');
+      else if (e === 'too many attempts') bad('Too many wrong codes. Try again tomorrow or write to support.', 'Слишком много неверных кодов. Попробуйте завтра или напишите в поддержку.');
+      else if (e === 'wallet taken') bad('This wallet is bound to another player.', 'Этот кошелёк привязан к другому игроку.');
+      else if (e === 'change pending') bad('A change is already waiting.', 'Смена уже запрошена и ждёт.');
+      else if (e === 'same address') bad('This is already your wallet.', 'Это и так ваш кошелёк.');
+      else bad('Could not request the change.', 'Не удалось запросить смену.');
+    });
+  });
   function applyWallet() {
     var ch = CHAIN_OF[net], w = wallets[ch];
     document.body.classList.toggle('nobind', walletsLoaded && !w);
@@ -204,14 +265,15 @@
     if (!$('bindok').checked) { m.className = 'note bad'; m.innerHTML = bi('Please confirm it is your personal wallet.', 'Подтвердите, что это ваш личный кошелёк.'); m.hidden = false; return; }
     ask('Bind ' + a + ' for good? It cannot be changed later.', 'Привязать ' + a + ' навсегда? Сменить его потом будет нельзя.', async function () {
       $('bindbtn').disabled = true;
-      var r = await sb.from('player_wallets').insert({ user_id: me.id, chain: CHAIN_OF[net], address: a });
+      var r = await walletCall({ action: 'bind', chain: CHAIN_OF[net], address: a });
       $('bindbtn').disabled = false;
-      if (r.error) {
+      if (!r.ok) {
         haptic('error'); m.className = 'note bad'; m.hidden = false;
-        m.innerHTML = /duplicate|unique/i.test(r.error.message) ? bi('This wallet is already bound (to you or to another player).', 'Этот кошелёк уже привязан (к вам или к другому игроку).') : bi('Could not bind. Check the address and try again.', 'Не удалось привязать. Проверьте адрес и попробуйте ещё раз.');
+        m.innerHTML = r.data.error === 'wallet taken' ? bi('This wallet is already bound to another player.', 'Этот кошелёк уже привязан к другому игроку.') : r.data.error === 'already bound' ? bi('A wallet is already bound on this network.', 'В этой сети кошелёк уже привязан.') : bi('Could not bind. Check the address and try again.', 'Не удалось привязать. Проверьте адрес и попробуйте ещё раз.');
+        if (r.data.error === 'already bound') loadWallets();
         return;
       }
-      haptic('success'); $('bindaddr').value = ''; $('bindok').checked = false; await loadWallets();
+      haptic('success'); $('bindaddr').value = ''; $('bindok').checked = false; takeState(r.data);
     });
   });
   /* how much can go back to this network now ("back the same way") */
@@ -294,6 +356,7 @@
       else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
       else if (rd.error === 'below fee') wmsg('The amount is too small to cover the fee (' + rd.fee + ' USDT).', 'Сумма слишком мала, чтобы покрыть комиссию (' + rd.fee + ' USDT).', true);
       else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
+      else if (rd.error === 'wallet change pending') wmsg('A wallet change is waiting: cash outs are frozen until ' + new Date(rd.until).toLocaleString() + '.', 'Идёт смена кошелька: выводы заморожены до ' + new Date(rd.until).toLocaleString('ru-RU') + '.', true);
       else if (rd.error === 'address not allowed' || rd.error === 'no bound wallet') wmsg('Cash outs go only to your bound wallet on this network.', 'Вывод возможен только на ваш привязанный кошелёк в этой сети.', true);
       else if (rd.error === 'same way') {
         var wh = (rd.where || []).map(function (x) { return CHAIN_NAME[x.chain] + ' — $' + x.amount; }).join(', ');
@@ -735,6 +798,17 @@
       if (/[?&]tab=admin/.test(location.search)) showTab('admin');
     } catch (e) {}
   }
+  $('adm-wc').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var m = $('adm-wc-msg'); m.hidden = true;
+    var gg = $('adm-wc-gg').value.replace(/\D/g, ''), ch = $('adm-wc-chain').value, a = $('adm-wc-addr').value.trim();
+    ask('File a wallet change for ID ' + fid(gg) + ' (' + ch + ')? It takes effect in 7 days, the player can cancel it.', 'Оформить смену кошелька для ID ' + fid(gg) + ' (' + ch + ')? Вступит в силу через 7 дней, игрок может отменить.', async function () {
+      var r = await adminCall({ action: 'wallet_change', gg_id: gg, chain: ch, address: a });
+      m.hidden = false;
+      if (r.ok) { m.className = 'note'; m.innerHTML = bi('Filed. Takes effect on ', 'Оформлено. Вступит в силу ') + new Date(r.data.effective_at).toLocaleString('ru-RU'); $('adm-wc-addr').value = ''; }
+      else { m.className = 'note bad'; m.textContent = r.data.error || 'error'; }
+    });
+  });
   $('adm-logform').addEventListener('submit', function (e) { e.preventDefault(); loadLog(); });
   $('adm-add').addEventListener('submit', async function (e) {
     e.preventDefault();

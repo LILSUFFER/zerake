@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=25">
+<link rel="stylesheet" href="../assets/app.css?v=26">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -33,6 +33,19 @@
     <button type="button" data-net="TON"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#fff" d="M17.9 17.4v0c-.1 0-.7.1-1.9.1-1 0-1.7 0-1.9-.1v0c-3.7-.2-6.4-.8-6.4-1.6s2.7-1.4 6.4-1.6v2.5c.2 0 .9.1 1.9.1 1.2 0 1.8-.1 1.9-.1v-2.5c3.7.2 6.4.8 6.4 1.6s-2.7 1.4-6.4 1.6m0-3.4v-2.3h5.2V8.3H8.9v3.4h5.2V14c-4.2.2-7.3 1-7.3 2s3.1 1.8 7.3 2v7.2h3.8V18c4.2-.2 7.3-1 7.3-2s-3.1-1.8-7.3-2"/></svg><svg class="n" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0098EA"/><path fill="#fff" d="M21.6 9H10.4c-2 0-3.3 2.2-2.3 4l6.9 12c.4.8 1.6.8 2 0l6.9-12c1-1.8-.3-4-2.3-4zm-6.6 12.5l-1.5-2.9-3.6-6.4c-.2-.4.1-.9.5-.9h4.6zm7.6-9.3l-3.6 6.4-1.5 2.9v-10.2h4.6c.4 0 .7.5.5.9z"/></svg></span><span class="nn"><b>TON</b><small><span class="en">USDT on TON</span><span class="ru">USDT в TON</span></small></span></button>
     <button type="button" data-net="GRAM"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0098EA"/><path fill="#fff" d="M21.6 9H10.4c-2 0-3.3 2.2-2.3 4l6.9 12c.4.8 1.6.8 2 0l6.9-12c1-1.8-.3-4-2.3-4zm-6.6 12.5l-1.5-2.9-3.6-6.4c-.2-.4.1-.9.5-.9h4.6zm7.6-9.3l-3.6 6.4-1.5 2.9v-10.2h4.6c.4 0 .7.5.5.9z"/></svg></span><span class="nn"><b>GRAM</b><small><span class="en">TON coin</span><span class="ru">Монета TON</span></small></span></button>
   </div>
+
+  <!-- a wallet change is waiting -->
+  <section id="pendbox" class="card warnbox" hidden>
+    <b class="ctitle">🔐 <span class="en">Wallet change requested</span><span class="ru">Запрошена смена кошелька</span></b>
+    <p class="payhint" id="pendtext"></p>
+    <button class="btn ghost-red" id="pendcancel" type="button"><span class="en">Cancel the change</span><span class="ru">Отменить смену</span></button>
+  </section>
+  <!-- no recovery code (after a change through support) -->
+  <section id="nocode" class="card warnbox" hidden>
+    <b class="ctitle">🔑 <span class="en">Create a new recovery code</span><span class="ru">Создайте новый код восстановления</span></b>
+    <p class="payhint"><span class="en">It lets you change your wallet in an emergency.</span><span class="ru">Он нужен, чтобы сменить кошелёк в экстренном случае.</span></p>
+    <button class="btn" id="newcodebtn" type="button"><span class="en">Create code</span><span class="ru">Создать код</span></button>
+  </section>
 
   <!-- ClubGG ID banner (shown until the player adds an ID) -->
   <section id="noid" class="card warn" hidden>
@@ -148,6 +161,15 @@
       <label><span class="en">Your bound wallet</span><span class="ru">Ваш привязанный кошелёк</span></label>
       <div class="fieldrow"><span class="addr" id="wd-wallet" style="background:none;border:0;padding:0">—</span><span class="pill">🔒</span></div>
       <input type="hidden" id="waddr">
+      <button class="linkish" type="button" id="chgopen" style="justify-self:start"><span class="en">Lost access to this wallet? Change it</span><span class="ru">Потеряли доступ к кошельку? Сменить</span></button>
+      <div class="stack chgform" id="chgform" hidden>
+        <p class="payhint"><span class="en">Enter the new wallet and your recovery code. The change takes effect in <b>48 hours</b>; cash outs are frozen until then, and you get a message you can cancel it from.</span><span class="ru">Укажите новый кошелёк и код восстановления. Смена вступит в силу через <b>48 часов</b>. До этого выводы заморожены, а вам придёт сообщение, из которого смену можно отменить.</span></p>
+        <input id="chgaddr" spellcheck="false" autocapitalize="off" placeholder="T..." style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
+        <input id="chgcode" spellcheck="false" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" style="font-family:ui-monospace,Consolas,monospace;font-size:16px;letter-spacing:.08em">
+        <p class="note" id="chgmsg" hidden></p>
+        <button class="btn" type="button" id="chgbtn"><span class="en">Request the change (48 h)</span><span class="ru">Запросить смену (48 ч)</span></button>
+        <p class="hint"><span class="en">Lost the code? Write to support: the change is checked by hand and takes 7 days.</span><span class="ru">Потеряли код? Напишите в поддержку: смену проверят вручную, она займёт 7 дней.</span></p>
+      </div>
       <p class="hint" id="wcap" hidden></p>
       <p class="note bad" id="wnoaddr" hidden><span class="en">You have not bound a wallet on this network yet. It is bound with your first deposit on the Buy tab.</span><span class="ru">В этой сети у вас ещё нет привязанного кошелька. Он привязывается перед первым депозитом на вкладке «Купить».</span></p>
 
@@ -201,6 +223,14 @@
     <div class="card" id="adm-owner" hidden>
       <div class="label"><span class="en">Club wallet (auto payouts)</span><span class="ru">Кошелёк клуба (автовыплаты)</span></div>
       <div class="stack" id="adm-wallet"></div>
+      <div class="label"><span class="en">Wallet change through support (7 days)</span><span class="ru">Смена кошелька через поддержку (7 дней)</span></div>
+      <form class="stack" id="adm-wc" autocomplete="off">
+        <input id="adm-wc-gg" placeholder="ClubGG ID" inputmode="numeric">
+        <select id="adm-wc-chain" class="addrsel" style="font-family:inherit"><option value="TRON">Tron (TRC20)</option><option value="BSC">BNB Chain (BEP20)</option><option value="TON">TON (USDT-TON, GRAM)</option></select>
+        <input id="adm-wc-addr" placeholder="New wallet address" spellcheck="false" autocapitalize="off" style="font-family:ui-monospace,Consolas,monospace;font-size:14px">
+        <button class="btn" type="submit"><span class="en">File the change</span><span class="ru">Оформить смену</span></button>
+        <p class="note" id="adm-wc-msg" hidden></p>
+      </form>
       <div class="label"><span class="en">Managers</span><span class="ru">Менеджеры</span></div>
       <div class="stack" id="adm-staff"></div>
       <form class="addstaff" id="adm-add" autocomplete="off">
@@ -223,6 +253,18 @@
   </footer>
 </main>
 
+<div id="codebox" class="overlay" hidden>
+  <div class="card codecard">
+    <div class="paidmark">🔑</div>
+    <b class="paidtitle"><span class="en">Your recovery code</span><span class="ru">Ваш код восстановления</span></b>
+    <div class="bigcode" id="codetext">—</div>
+    <button class="chip" type="button" data-copy-from="codetext" style="justify-self:center"><span class="en">Copy</span><span class="ru">Копировать</span></button>
+    <p class="payhint"><span class="en">Save it somewhere safe (write it down or keep a screenshot). We show it <b>only once</b>. With it you can change your wallet in an emergency. Without it, only through support in 7 days.</span><span class="ru">Сохраните его в надёжном месте (запишите или сделайте скриншот). Мы показываем его <b>только один раз</b>. С ним можно сменить кошелёк в экстренном случае. Без него — только через поддержку за 7 дней.</span></p>
+    <label class="chk"><input type="checkbox" id="codeok"> <span><span class="en">I have saved the code</span><span class="ru">Я сохранил код</span></span></label>
+    <button class="btn primary" type="button" id="codedone" disabled><span class="en">Done</span><span class="ru">Готово</span></button>
+  </div>
+</div>
+
 <div id="splash" class="splash">
   <div class="spin"></div>
   <p id="splash-msg"></p>
@@ -231,6 +273,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=25"></script>
+<script src="../assets/app.js?v=26"></script>
 </body>
 </html>

@@ -279,3 +279,10 @@ body:not(.nobind) #bindcard, #tab-deposit:not(.st-form) #bindcard { display: non
 .chk { display: flex; gap: 10px; align-items: flex-start; margin: 0; color: var(--soft); font-size: 13px; cursor: pointer; }
 .chk input { width: 18px; height: 18px; margin: 1px 0 0; padding: 0; accent-color: var(--green); flex: none; }
 .pill.mono { font: 500 12px ui-monospace, Consolas, monospace; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.warnbox { margin-top: 14px; border-color: rgba(245,165,36,.45); background: linear-gradient(180deg, var(--amber-bg), transparent 80%), var(--card); }
+.overlay { position: fixed; inset: 0; z-index: 10; background: rgba(5,6,8,.82); display: grid; place-items: center; padding: 18px; backdrop-filter: blur(4px); }
+.codecard { max-width: 420px; width: 100%; text-align: center; justify-items: center; }
+.bigcode { font: 600 26px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .12em; color: var(--green); padding: 14px 18px; border-radius: var(--r-md); background: var(--card-2); border: 1px dashed var(--green-line); user-select: all; }
+.codecard .chk { text-align: left; }
+.chgform { padding: 14px; border-radius: var(--r-md); background: var(--card-2); border: 1px solid var(--line); }

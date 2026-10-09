@@ -25,6 +25,10 @@ main { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; padding
 }
 .tabs button.on { background: var(--green-bg); color: var(--green); }
 
+.nets { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 100px; padding: 4px; }
+.nets button { font: 500 13px Geist, sans-serif; color: var(--soft); background: none; border: 0; border-radius: 100px; padding: 9px 6px; cursor: pointer; }
+.nets button.on { background: var(--card-2); color: var(--fg); }
+body[data-net="TRC20"] .only-bep, body[data-net="BEP20"] .only-trc { display: none !important; }
 .pane { display: grid; gap: 12px; margin-top: 14px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; display: grid; gap: 12px; }
 .card.warn { margin-top: 14px; border-color: rgba(245,104,104,.4); }

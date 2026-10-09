@@ -3,7 +3,9 @@
   var C = window.ZERAKE || {};
   var MIN_DEPOSIT = C.minDeposit || 10;
   var MIN_WITHDRAW = C.minWithdraw || 10;
-  var TRON = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+  var ADDR_RE = { TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BEP20: /^0x[0-9a-fA-F]{40}$/ };
+  var PLACEHOLDER = { TRC20: 'T...', BEP20: '0x...' };
+  var net = 'TRC20', addrCache = {};
   var tg = window.Telegram && window.Telegram.WebApp;
   var $ = function (id) { return document.getElementById(id); };
   var sb = null, me = null, ggId = '';
@@ -61,6 +63,7 @@
   function showTab(name) {
     document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); });
     ['deposit', 'withdraw', 'history'].forEach(function (n) { $('tab-' + n).hidden = n !== name; });
+    $('nets').hidden = name === 'history';
     if (name === 'history') loadHistory();
   }
   document.querySelectorAll('.tabs button').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.tab); }); });
@@ -93,17 +96,44 @@
     $('wsubmit').disabled = !ggId;
   }
   async function loadAddress() {
-    var r = await sb.from('deposit_addresses').select('address').eq('user_id', me.id).maybeSingle();
-    var a = r.data && r.data.address;
+    var n = net;
+    var a = addrCache[n];
+    if (!a) {
+      $('addr').textContent = '…'; $('copy').disabled = true; $('addr-note').textContent = '';
+      try {
+        var ses = (await sb.auth.getSession()).data.session;
+        var r = await fetch(C.supabaseUrl + '/functions/v1/get-deposit-address', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
+          body: JSON.stringify({ network: n })
+        });
+        var d = await r.json();
+        if (r.ok && d.address) { a = addrCache[n] = d.address; }
+      } catch (e) {}
+    }
+    if (n !== net) return; // the player switched networks meanwhile
     $('addr').textContent = a || '—';
     $('copy').disabled = !a;
-    $('addr-note').textContent = a ? '' : t('Your personal address is being prepared. Check back in a moment.', 'Ваш личный адрес готовится. Загляните чуть позже.');
+    $('addr-note').textContent = a ? '' : t('Could not get your address. Please try again in a moment.', 'Не удалось получить адрес. Попробуйте ещё раз чуть позже.');
   }
+
+  function applyNet() {
+    document.body.dataset.net = net;
+    document.querySelectorAll('#nets button').forEach(function (b) { b.classList.toggle('on', b.dataset.net === net); });
+    document.querySelectorAll('.netname').forEach(function (e) { e.textContent = net; });
+    $('dep-net').textContent = 'USDT · ' + net;
+    $('waddr').placeholder = PLACEHOLDER[net];
+    $('waddr').value = '';
+    $('wmsg').hidden = true;
+  }
+  document.querySelectorAll('#nets button').forEach(function (b) {
+    b.addEventListener('click', function () { net = b.dataset.net; applyNet(); loadAddress(); });
+  });
 
   var rows = [];
   async function loadHistory() {
-    var d = await sb.from('deposits').select('id,amount,status,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
-    var w = await sb.from('withdrawals').select('id,amount,status,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
+    var d = await sb.from('deposits').select('id,amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
+    var w = await sb.from('withdrawals').select('id,amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
     rows = []
       .concat((d.data || []).map(function (x) { x.kind = 'dep'; return x; }))
       .concat((w.data || []).map(function (x) { x.kind = 'wd'; return x; }))
@@ -122,7 +152,7 @@
       var el = document.createElement('div'); el.className = 'item';
       var left = document.createElement('div');
       var title = document.createElement('div'); title.innerHTML = x.kind === 'dep' ? bi('Deposit', 'Депозит') : bi('Withdrawal', 'Вывод');
-      var date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      var date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (x.network || 'TRC20');
       left.appendChild(title); left.appendChild(date);
       var right = document.createElement('div');
       var amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = (x.kind === 'dep' ? '+' : '−') + Number(x.amount) + ' USDT';
@@ -150,9 +180,13 @@
     var address = $('waddr').value.trim();
     if (!ggId) { wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true); return; }
     if (!(amount >= MIN_WITHDRAW)) { wmsg('Minimum withdrawal is ' + MIN_WITHDRAW + ' USDT.', 'Минимальный вывод: ' + MIN_WITHDRAW + ' USDT.', true); return; }
-    if (!TRON.test(address)) { wmsg('Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).', true); return; }
+    if (!ADDR_RE[net].test(address)) {
+      if (net === 'TRC20') wmsg('Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).', true);
+      else wmsg('Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).', true);
+      return;
+    }
     $('wsubmit').disabled = true;
-    var r = await sb.from('withdrawals').insert({ user_id: me.id, amount: amount, address: address });
+    var r = await sb.from('withdrawals').insert({ user_id: me.id, amount: amount, address: address, network: net });
     $('wsubmit').disabled = false;
     if (r.error) { haptic('error'); wmsg('Could not send the request. Please try again.', 'Не удалось отправить запрос. Попробуйте ещё раз.', true); return; }
     haptic('success');
@@ -161,7 +195,9 @@
   });
 
   /* ---------- start ---------- */
-  $('min-dep').textContent = $('min-dep-ru').textContent = MIN_DEPOSIT;
+  document.querySelectorAll('.mindep').forEach(function (e) { e.textContent = MIN_DEPOSIT; });
+  document.querySelectorAll('.minwd').forEach(function (e) { e.textContent = MIN_WITHDRAW; });
+  applyNet();
   signIn().then(function (user) {
     me = user;
     var u = tg.initDataUnsafe && tg.initDataUnsafe.user;

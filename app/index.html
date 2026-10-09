@@ -26,6 +26,11 @@
     <button role="tab" data-tab="history"><span class="en">History</span><span class="ru">История</span></button>
   </nav>
 
+  <div class="nets" id="nets">
+    <button type="button" data-net="TRC20" class="on">USDT · TRC20</button>
+    <button type="button" data-net="BEP20">USDT · BEP20</button>
+  </div>
+
   <!-- ClubGG ID banner (shown until the player adds an ID) -->
   <section id="noid" class="card warn" hidden>
     <b><span class="en">Add your ClubGG ID first</span><span class="ru">Сначала добавьте ID в ClubGG</span></b>
@@ -39,7 +44,7 @@
   <!-- Deposit -->
   <section id="tab-deposit" class="pane">
     <div class="card">
-      <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b>USDT · TRC20</b></div>
+      <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b id="dep-net">USDT · TRC20</b></div>
       <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id">—</b></div>
     </div>
 
@@ -51,10 +56,12 @@
     </div>
 
     <ol class="steps">
-      <li><span class="en">Send USDT <b>on the TRC20 network only</b> to the address above.</span><span class="ru">Отправьте USDT <b>только в сети TRC20</b> на адрес выше.</span></li>
-      <li><span class="en">Minimum deposit: <b id="min-dep">10</b> USDT. Smaller amounts are not credited.</span><span class="ru">Минимальный депозит: <b id="min-dep-ru">10</b> USDT. Меньшие суммы не зачисляются.</span></li>
+      <li><span class="en">Send USDT <b>on the <span class="netname">TRC20</span> network only</b> to the address above.</span><span class="ru">Отправьте USDT <b>только в сети <span class="netname">TRC20</span></b> на адрес выше.</span></li>
+      <li><span class="en">Minimum deposit: <b class="mindep">10</b> USDT. Smaller amounts are not credited.</span><span class="ru">Минимальный депозит: <b class="mindep">10</b> USDT. Меньшие суммы не зачисляются.</span></li>
       <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
     </ol>
+    <p class="hint only-trc"><span class="en">The sender pays the network fee. Sending from an exchange to TRC20 usually costs a few dollars.</span><span class="ru">Комиссию сети платит отправитель. Перевод с биржи в сети TRC20 обычно стоит несколько долларов.</span></p>
+    <p class="hint only-bep"><span class="en">The sender pays the network fee. BEP20 transfers usually cost a few cents.</span><span class="ru">Комиссию сети платит отправитель. Переводы в сети BEP20 обычно стоят несколько центов.</span></p>
     <p class="hint warnx"><span class="en">Sending other coins or using another network means the funds are lost.</span><span class="ru">Другие монеты или другая сеть приведут к потере средств.</span></p>
   </section>
 
@@ -66,7 +73,7 @@
       <label for="wamt"><span class="en">Amount, USDT</span><span class="ru">Сумма, USDT</span></label>
       <input id="wamt" inputmode="decimal" placeholder="50">
 
-      <label for="waddr"><span class="en">TRC20 address</span><span class="ru">Адрес TRC20</span></label>
+      <label for="waddr"><span class="en"><span class="netname">TRC20</span> address</span><span class="ru">Адрес <span class="netname">TRC20</span></span></label>
       <input id="waddr" placeholder="T..." spellcheck="false" autocapitalize="off">
 
       <p class="note" id="wmsg" hidden></p>
@@ -76,6 +83,9 @@
     <ol class="steps">
       <li><span class="en">First send the chips back to the club in the ClubGG app.</span><span class="ru">Сначала верните фишки клубу в приложении ClubGG.</span></li>
       <li><span class="en">Then file the request here. We pay out after the chips are received.</span><span class="ru">Затем оформите запрос здесь. Мы выплатим после получения фишек.</span></li>
+      <li class="only-trc"><span class="en">The network fee is taken from the payout. On TRC20 it is usually a few dollars.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети TRC20 она обычно составляет несколько долларов.</span></li>
+      <li class="only-bep"><span class="en">The network fee is taken from the payout. On BEP20 it is usually a few cents.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети BEP20 она обычно составляет несколько центов.</span></li>
+      <li><span class="en">Minimum withdrawal: <b class="minwd">10</b> USDT.</span><span class="ru">Минимальный вывод: <b class="minwd">10</b> USDT.</span></li>
     </ol>
   </section>
 

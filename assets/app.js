@@ -223,13 +223,28 @@
     else if (kind === 'expired') { m.className = 'note bad'; m.innerHTML = bi('The request has expired. If you already paid, we will still find the payment. Otherwise create a new request.', 'Срок заявки истёк. Если вы уже заплатили, мы всё равно найдём платёж. Иначе создайте новую заявку.'); }
     else { m.className = 'note'; m.innerHTML = bi('Waiting for your payment…', 'Ждём ваш платёж…'); }
   }
-  async function checkPaid() {
-    if (!curReq) return;
-    var r = await sb.from('deposit_requests').select('status').eq('request_no', curReq.request_no).maybeSingle();
-    if (r.data && r.data.status === 'paid') { curReq.paid = true; stopReqTimers(); setReqStatus('paid'); haptic('success'); $('rv-timer').textContent = '—'; }
+  function showPaid(st) {
+    var first = !curReq.paid;
+    curReq.paid = true; curReq.sent = st === 'chips_sent';
+    $('req-view').hidden = false; $('reqform').hidden = true;
+    $('req-view').classList.add('paid');
+    $('rv-paid-sub').innerHTML = '<b>' + curReq.amount + ' USDT</b> · ' + bi('chips go to ClubGG ID ', 'фишки придут на ID в ClubGG ') + '<b>' + (ggId || '—') + '</b>';
+    $('rv-p2').className = curReq.sent ? 'done' : 'active';
+    $('rv-p3').className = curReq.sent ? 'done' : '';
+    if (first) haptic('success');
+    if (curReq.sent) stopReqTimers();
   }
+  async function refreshPaid() {
+    if (!curReq) return;
+    var rq = await sb.from('deposit_requests').select('status,tx_hash').eq('request_no', curReq.request_no).maybeSingle();
+    if (!rq.data || rq.data.status !== 'paid') return;
+    var dp = await sb.from('deposits').select('status').eq('tx_hash', rq.data.tx_hash).maybeSingle();
+    showPaid(dp.data ? dp.data.status : 'received');
+  }
+  async function checkPaid() { await refreshPaid(); }
   function showRequest(r) {
     stopReqTimers(); curReq = r;
+    $('req-view').classList.remove('paid');
     $('reqform').hidden = true; $('req-view').hidden = false;
     $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.amount;
     renderQr(r.address); setReqStatus('wait');
@@ -245,7 +260,14 @@
     $('reqmsg').hidden = true;
     var r = await callReq({ check: true });
     if (r.ok && r.data.request) showRequest(r.data.request);
-    else { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; }
+    else {
+      stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false;
+      // the player's last request was paid recently: keep showing how far it has got
+      var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 24 * 3600 * 1000) {
+        curReq = lr.data; poll = setInterval(checkPaid, 8000); refreshPaid();
+      }
+    }
   }
   $('reqform').addEventListener('submit', async function (e) {
     e.preventDefault();

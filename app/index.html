@@ -57,7 +57,17 @@
       </form>
 
       <div id="req-view" class="stack" hidden>
-        <div class="card">
+        <div class="card paidbox" id="rv-paidbox">
+          <div class="paidmark">&#10003;</div>
+          <b class="paidtitle"><span class="en">Payment received</span><span class="ru">Платёж получен</span></b>
+          <p class="paidsub" id="rv-paid-sub"></p>
+          <ol class="prog">
+            <li class="done"><span class="en">Payment received</span><span class="ru">Платёж получен</span></li>
+            <li id="rv-p2"><span class="en">A manager is sending your chips</span><span class="ru">Менеджер отправляет фишки</span></li>
+            <li id="rv-p3"><span class="en">Chips sent. Good luck!</span><span class="ru">Фишки отправлены. Удачной игры!</span></li>
+          </ol>
+        </div>
+        <div class="card" id="rv-details">
           <div class="row"><span class="muted"><span class="en">Request number</span><span class="ru">Номер заявки</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
           <div class="mono" id="rv-no">—</div>
           <div class="row"><span class="muted"><span class="en">Token</span><span class="ru">Токен</span></span><b>Tether USDT</b></div>

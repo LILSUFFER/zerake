@@ -96,9 +96,24 @@ Deno.serve(async (req: Request) => {
     // Only the first press counts, and only by whoever took it (the owner may always finish a deposit).
     const q = admin.from("deposits").update({ status: "chips_sent", handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString() })
       .eq("id", id).eq("status", "received");
-    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id");
+    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount");
     if (r.error) { console.error("mark_sent:", r.error.message); return out({ error: "failed" }, 500, h); }
-    return (r.data?.length ?? 0) === 1 ? out({ ok: true }, 200, h) : out({ error: "taken or already handled" }, 409, h);
+    if ((r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
+    // Tell the player the chips are on their way (works if they have started the bot).
+    const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    const owner = r.data![0];
+    const pu = await admin.auth.admin.getUserById(owner.user_id);
+    const ptid = pu.data?.user?.user_metadata?.telegram_id;
+    const gg = (await admin.from("profiles").select("gg_id").eq("user_id", owner.user_id).maybeSingle()).data?.gg_id ?? "";
+    if (botToken && ptid) {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: Number(ptid), text: `🎉 Chips sent to ClubGG ID ${gg}. Good luck at the tables!
+
+🎉 Фишки отправлены на ваш ID в ClubGG ${gg}. Удачной игры!` }),
+      }).catch(() => {});
+    }
+    return out({ ok: true }, 200, h);
   }
 
   if (action === "unmatched") {

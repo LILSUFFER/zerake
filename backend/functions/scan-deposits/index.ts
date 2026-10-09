@@ -87,6 +87,17 @@ Deno.serve(async () => {
     }
   }
 
+  async function notifyUser(userId: string, text: string) {
+    if (!botToken) return;
+    const u = await admin.auth.admin.getUserById(userId);
+    const tid = u.data?.user?.user_metadata?.telegram_id;
+    if (!tid) return;
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: Number(tid), text, disable_web_page_preview: true }),
+    }).catch(() => {});
+  }
+
   const { data: chains } = await admin.from("chain_config").select("*").eq("enabled", true);
   for (const c of chains ?? []) {
     try {
@@ -122,6 +133,14 @@ Deno.serve(async () => {
         }
         newCursor = Date.now();
 
+        // The overlap window shows payments we already recorded (their request is "paid" by now).
+        // Those are not "unidentified": drop everything that is already a deposit.
+        if (found.length) {
+          const kd = await admin.from("deposits").select("tx_hash").eq("network", "TRC20").in("tx_hash", found.map((f) => f.tx_hash));
+          const known = new Set((kd.data ?? []).map((r) => r.tx_hash));
+          found = found.filter((f) => !known.has(f.tx_hash));
+        }
+
         const rows: Record<string, unknown>[] = [];
         const orphans: Record<string, unknown>[] = [];
         const reqByTx = new Map<string, Req>();
@@ -149,6 +168,11 @@ Deno.serve(async () => {
           await admin.rpc("pool_credit", { p_address: d.to_address, p_amount: d.amount });
         }
         for (const d of created.filter((x) => x.status === "received")) {
+          await notifyUser(d.user_id, `✅ Payment received: ${d.amount} USDT.
+We are sending the chips to your ClubGG ID now.
+
+✅ Платёж получен: ${d.amount} USDT.
+Сейчас отправим фишки на ваш ID в ClubGG.`);
           const req = reqByTx.get(d.tx_hash)!;
           const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
           await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT

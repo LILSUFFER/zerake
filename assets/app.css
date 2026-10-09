@@ -116,3 +116,18 @@ input:focus { outline: none; border-color: var(--green); }
 .addstaff input { padding: 12px 14px; font-size: 16px; }
 .addstaff .btn { width: auto; padding: 12px 18px; }
 .linkish { background: none; border: 0; color: var(--soft); text-decoration: underline; font: 500 13px Geist, sans-serif; cursor: pointer; padding: 0; }
+
+#req-view.paid #rv-details { display: none; }
+#req-view:not(.paid) #rv-paidbox { display: none; }
+.paidbox { text-align: center; border-color: var(--green); }
+.paidmark { width: 56px; height: 56px; border-radius: 50%; margin: 4px auto 0; display: grid; place-items: center; background: var(--green-bg); color: var(--green); font-size: 30px; }
+.paidtitle { font-size: 22px; font-weight: 500; }
+.paidsub { margin: 0; color: var(--soft); font-size: 14px; }
+.paidsub b { color: var(--fg); font-weight: 500; }
+.prog { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; text-align: left; }
+.prog li { position: relative; padding: 11px 14px 11px 40px; border: 1px solid var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; background: var(--card-2); }
+.prog li::before { content: ""; position: absolute; left: 14px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; border: 2px solid var(--line); box-sizing: border-box; }
+.prog li.done { color: var(--fg); border-color: rgba(15,185,131,.4); }
+.prog li.done::before { background: var(--green); border-color: var(--green); }
+.prog li.active { color: var(--fg); }
+.prog li.active::before { border-color: var(--green); border-top-color: transparent; animation: s .9s linear infinite; }

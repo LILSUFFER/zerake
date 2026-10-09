@@ -3,14 +3,20 @@
   var C = window.ZERAKE || {};
   var MIN_DEPOSIT = C.minDeposit || 10;
   var MIN_WITHDRAW = C.minWithdraw || 10;
-  var ADDR_RE = { TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BEP20: /^0x[0-9a-fA-F]{40}$/ };
-  var PLACEHOLDER = { TRC20: 'T...', BEP20: '0x...' };
-  var net = 'TRC20', addrCache = {};
+  var ADDR_RE = { TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BEP20: /^0x[0-9a-fA-F]{40}$/, TON: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/ };
+  var PLACEHOLDER = { TRC20: 'T...', BEP20: '0x...', TON: 'UQ...' };
+  var ADDR_HINT = {
+    TRC20: ['Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).'],
+    BEP20: ['Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).'],
+    TON: ['Enter a valid TON address (starts with UQ or EQ).', 'Введите корректный адрес TON (начинается с UQ или EQ).']
+  };
+  var net = 'TRC20';
   var tg = window.Telegram && window.Telegram.WebApp;
   var $ = function (id) { return document.getElementById(id); };
   var sb = null, me = null, ggId = '';
 
   function bi(en, ru) { return '<span class="en">' + en + '</span><span class="ru">' + ru + '</span>'; }
+  function fid(v) { var d = String(v == null ? '' : v).replace(/\D/g, ''); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, '$1-') : String(v || ''); }
   function t(en, ru) { return document.body.dataset.lang === 'ru' ? ru : en; }
 
   /* ---------- language ---------- */
@@ -92,40 +98,17 @@
   async function loadProfile() {
     var r = await sb.from('profiles').select('gg_id').eq('user_id', me.id).maybeSingle();
     ggId = (r.data && r.data.gg_id) || '';
-    $('dep-id').textContent = $('dep-id2').textContent = $('wd-id').textContent = ggId || '—';
+    $('dep-id').textContent = $('dep-id2').textContent = $('wd-id').textContent = ggId ? fid(ggId) : '—';
     $('noid').hidden = !!ggId;
     $('wsubmit').disabled = !ggId;
   }
-  async function loadAddress() {
-    if (net === 'TRC20') return loadOpenRequest();
-    var n = net;
-    var a = addrCache[n];
-    if (!a) {
-      $('addr').textContent = '…'; $('copy').disabled = true; $('addr-note').textContent = '';
-      try {
-        var ses = (await sb.auth.getSession()).data.session;
-        var r = await fetch(C.supabaseUrl + '/functions/v1/get-deposit-address', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
-          body: JSON.stringify({ network: n })
-        });
-        var d = await r.json();
-        if (r.ok && d.address) { a = addrCache[n] = d.address; }
-      } catch (e) {}
-    }
-    if (n !== net) return; // the player switched networks meanwhile
-    $('addr').textContent = a || '—';
-    $('copy').disabled = !a;
-    $('addr-note').textContent = a ? '' : t('Could not get your address. Please try again in a moment.', 'Не удалось получить адрес. Попробуйте ещё раз чуть позже.');
-  }
+  function loadAddress() { return loadOpenRequest(); }
 
   function applyNet() {
     document.body.dataset.net = net;
-    $('trc-flow').hidden = net !== 'TRC20';
-    $('bep-flow').hidden = net !== 'BEP20';
     document.querySelectorAll('#nets button').forEach(function (b) { b.classList.toggle('on', b.dataset.net === net); });
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = net; });
-    $('dep-net').textContent = 'USDT · ' + net;
+    $('req-net').textContent = 'USDT · ' + net;
     $('waddr').placeholder = PLACEHOLDER[net];
     $('waddr').value = '';
     $('wmsg').hidden = true;
@@ -168,11 +151,6 @@
   }
 
   /* ---------- actions ---------- */
-  $('copy').addEventListener('click', function () {
-    var a = $('addr').textContent; if (!a || a === '—') return;
-    var done = function () { haptic('success'); var b = $('copy'); b.innerHTML = bi('Copied', 'Скопировано'); setTimeout(function () { b.innerHTML = bi('Copy address', 'Скопировать адрес'); }, 1500); };
-    if (navigator.clipboard) navigator.clipboard.writeText(a).then(done, function () {});
-  });
   $('open-site').addEventListener('click', function () { try { tg.openLink('https://zerake.com/'); } catch (e) { window.open('https://zerake.com/', '_blank'); } });
 
   function wmsg(en, ru, bad) {
@@ -184,15 +162,24 @@
     var address = $('waddr').value.trim();
     if (!ggId) { wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true); return; }
     if (!(amount >= MIN_WITHDRAW)) { wmsg('Minimum withdrawal is ' + MIN_WITHDRAW + ' USDT.', 'Минимальный вывод: ' + MIN_WITHDRAW + ' USDT.', true); return; }
-    if (!ADDR_RE[net].test(address)) {
-      if (net === 'TRC20') wmsg('Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).', true);
-      else wmsg('Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).', true);
+    if (!ADDR_RE[net].test(address)) { wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true); return; }
+    $('wsubmit').disabled = true;
+    var ses = (await sb.auth.getSession()).data.session;
+    var res = await fetch(C.supabaseUrl + '/functions/v1/create-withdrawal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
+      body: JSON.stringify({ network: net, address: address, amount: $('wamt').value })
+    });
+    var rd = {}; try { rd = await res.json(); } catch (x) {}
+    $('wsubmit').disabled = false;
+    if (!res.ok) {
+      haptic('error');
+      if (rd.error === 'below minimum') wmsg('Minimum withdrawal is ' + rd.min + ' USDT.', 'Минимальный вывод: ' + rd.min + ' USDT.', true);
+      else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
+      else if (rd.error === 'network disabled') wmsg('This network is not available yet.', 'Эта сеть пока недоступна.', true);
+      else wmsg('Could not send the request. Please try again.', 'Не удалось отправить запрос. Попробуйте ещё раз.', true);
       return;
     }
-    $('wsubmit').disabled = true;
-    var r = await sb.from('withdrawals').insert({ user_id: me.id, amount: amount, address: address, network: net });
-    $('wsubmit').disabled = false;
-    if (r.error) { haptic('error'); wmsg('Could not send the request. Please try again.', 'Не удалось отправить запрос. Попробуйте ещё раз.', true); return; }
     haptic('success');
     wmsg('Request sent. We will pay out after the chips are received.', 'Запрос отправлен. Выплатим после получения фишек.', false);
     $('wamt').value = ''; $('waddr').value = '';
@@ -206,7 +193,7 @@
     var r = await fetch(C.supabaseUrl + '/functions/v1/create-deposit-request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
-      body: JSON.stringify(body)
+      body: JSON.stringify(Object.assign({ network: net }, body))
     });
     var d = {}; try { d = await r.json(); } catch (e) {}
     return { ok: r.ok, data: d };
@@ -240,7 +227,7 @@
       $('rv-paid-sub').innerHTML = bi('Good luck at the tables!', 'Удачной игры!');
     } else {
       $('rv-paid-title').innerHTML = bi('Payment received', 'Платёж получен');
-      $('rv-paid-sub').innerHTML = bi('Please wait. A manager is sending the chips to your ClubGG ID ', 'Ожидайте. Менеджер отправляет фишки на ваш ID в ClubGG ') + '<b>' + (ggId || '—') + '</b>';
+      $('rv-paid-sub').innerHTML = bi('Please wait. A manager is sending the chips to your ClubGG ID ', 'Ожидайте. Менеджер отправляет фишки на ваш ID в ClubGG ') + '<b>' + (ggId ? fid(ggId) : '—') + '</b>';
     }
     if (first) haptic('success');
     if (curReq.sent) stopReqTimers();
@@ -270,12 +257,14 @@
   }
   async function loadOpenRequest() {
     $('reqmsg').hidden = true;
+    var asked = net;
     var r = await callReq({ check: true });
+    if (asked !== net) return; // the player switched networks meanwhile
     if (r.ok && r.data.request) showRequest(r.data.request);
     else {
       stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form');
       // the player's last request was paid recently: keep showing how far it has got
-      var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).eq('network', net).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 24 * 3600 * 1000) {
         curReq = lr.data; poll = setInterval(checkPaid, 8000); refreshPaid();
       }
@@ -289,7 +278,8 @@
     $('reqbtn').disabled = false;
     if (r.ok && r.data.request) { showRequest(r.data.request); return; }
     var er = r.data && r.data.error;
-    if (er === 'below minimum') reqErr('Minimum deposit is ' + r.data.min + ' USDT.', 'Минимальный депозит: ' + r.data.min + ' USDT.');
+    if (er === 'network disabled') reqErr('This network is not available yet.', 'Эта сеть пока недоступна.');
+    else if (er === 'below minimum') reqErr('Minimum deposit is ' + r.data.min + ' USDT.', 'Минимальный депозит: ' + r.data.min + ' USDT.');
     else if (er === 'above maximum') reqErr('Maximum deposit is ' + r.data.max + ' USDT.', 'Максимальный депозит: ' + r.data.max + ' USDT.');
     else if (er === 'bad amount') reqErr('Enter a valid amount, for example 50.', 'Введите корректную сумму, например 50.');
     else reqErr('Could not create the request. Please try again.', 'Не удалось создать заявку. Попробуйте ещё раз.');
@@ -342,10 +332,10 @@
     else if (r.ok) haptic('success');
     loadAdmin(false);
   }
-  function renderQueue(items) {
+  function renderQueue(items, wres) {
     var box = $('adm-queue'); box.innerHTML = '';
     var nNew = 0, nMine = 0;
-    if (!items.length) { box.appendChild(el('div', 'empty', bi('No deposits are waiting. Well done.', 'Заявок нет. Всё выполнено.'))); }
+    if (!items.length) { box.appendChild(el('div', 'empty', bi('No deposits are waiting. Well done.', 'Заявок на депозит нет. Всё выполнено.'))); }
     items.forEach(function (d) {
       var free = !d.claimed_name, mine = d.mine;
       if (free) nNew++;
@@ -353,8 +343,8 @@
       var need = d.base_amount != null ? Number(d.base_amount) : Number(d.amount);
       var card = el('div', 'tcard' + (mine ? ' mine' : (!free ? ' taken' : '')));
       var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', need + ' USDT')); top.appendChild(el('div', 'tnet', d.network)); card.appendChild(top);
-      var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (d.gg_id || '—') + '</b>'));
-      if (d.gg_id) idr.appendChild(copyChip(d.gg_id));
+      var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (d.gg_id ? fid(d.gg_id) : '—') + '</b>'));
+      if (d.gg_id) idr.appendChild(copyChip(fid(d.gg_id)));
       card.appendChild(idr);
       var meta = el('div', 'tmeta');
       meta.innerHTML = bi('Waiting ', 'Ждёт ') + ago(d.created_at) + (Number(d.amount) !== need ? ' · ' + bi('paid ', 'оплачено ') + d.amount : '');
@@ -366,7 +356,7 @@
       else if (mine) {
         b.className = 'tbtns two';
         b.appendChild(btn('primary', bi('Chips sent', 'Фишки отправлены'), function () {
-          ask('Mark ' + need + ' USDT for ID ' + (d.gg_id || '—') + ' as sent?', 'Отметить ' + need + ' USDT для ID ' + (d.gg_id || '—') + ' как отправленное?', function () { act('mark_sent', d.id); });
+          ask('Mark ' + need + ' USDT for ID ' + (d.gg_id ? fid(d.gg_id) : '—') + ' as sent?', 'Отметить ' + need + ' USDT для ID ' + (d.gg_id ? fid(d.gg_id) : '—') + ' как отправленное?', function () { act('mark_sent', d.id); });
         }));
         b.appendChild(btn('', bi('Release', 'Отпустить'), function () { act('release', d.id); }));
       } else if (staffRole === 'owner') b.appendChild(btn('', bi('Take over', 'Забрать себе'), function () { act('claim', d.id); }));
@@ -378,15 +368,67 @@
       }
       box.appendChild(card);
     });
+    nNew += wres.nNew; nMine += wres.nMine;
     $('adm-n-new').textContent = nNew; $('adm-n-mine').textContent = nMine;
     var bdg = $('adm-badge'); bdg.textContent = nNew; bdg.hidden = nNew === 0;
     // a new waiting deposit appeared since the last check: buzz the phone
-    var ids = items.filter(function (d) { return !d.claimed_name; }).map(function (d) { return d.id; });
+    var ids = items.filter(function (d) { return !d.claimed_name; }).map(function (d) { return d.id; }).concat(wres.free);
     if (seenNew) {
       var fresh = ids.filter(function (i) { return seenNew.indexOf(i) < 0; });
       if (fresh.length) { try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {} }
     }
     seenNew = ids;
+  }
+  function renderWQueue(items) {
+    var box = $('adm-wqueue'); box.innerHTML = '';
+    var nNew = 0, nMine = 0;
+    items.forEach(function (w) {
+      var free = !w.claimed_name, mine = w.mine;
+      if (free) nNew++;
+      if (mine) nMine++;
+      var card = el('div', 'tcard wd' + (mine ? ' mine' : (!free ? ' taken' : '')));
+      card.appendChild(el('div', 'tkind', bi('Cash out', 'Вывод')));
+      var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', Number(w.amount) + ' USDT')); top.appendChild(el('div', 'tnet', w.network)); card.appendChild(top);
+      var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (w.gg_id ? fid(w.gg_id) : '—') + '</b>'));
+      if (w.gg_id) idr.appendChild(copyChip(fid(w.gg_id)));
+      card.appendChild(idr);
+      var ar = el('div', 'tid'); ar.appendChild(el('div', 'addr', ''));
+      ar.firstChild.textContent = w.address;
+      ar.appendChild(copyChip(w.address));
+      card.appendChild(ar);
+      card.appendChild(el('div', 'tmeta', bi('Waiting ', 'Ждёт ') + ago(w.created_at)));
+      card.appendChild(el('div', 'note', bi('First check in ClubGG that these chips came back to the club.', 'Сначала проверьте в ClubGG, что фишки вернулись клубу.')));
+      if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + w.claimed_name));
+      var b = el('div', 'tbtns');
+      if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));
+      else if (mine) {
+        b.className = 'tbtns two';
+        b.appendChild(btn('primary', bi('I paid it', 'Я выплатил'), function () { payForm(card, w); }));
+        b.appendChild(btn('', bi('Release', 'Отпустить'), function () { wact('wrelease', w.id); }));
+      } else if (staffRole === 'owner') b.appendChild(btn('', bi('Take over', 'Забрать себе'), function () { wact('wclaim', w.id); }));
+      if (b.childNodes.length) card.appendChild(b);
+      if (mine || staffRole === 'owner') {
+        var rj = el('button', 'linkish', bi('Reject', 'Отклонить')); rj.type = 'button';
+        rj.addEventListener('click', function () { ask('Reject this cash out?', 'Отклонить этот вывод?', function () { wact('wreject', w.id); }); });
+        card.appendChild(rj);
+      }
+      box.appendChild(card);
+    });
+    return { nNew: nNew, nMine: nMine, free: items.filter(function (w) { return !w.claimed_name; }).map(function (w) { return 'w' + w.id; }) };
+  }
+  function payForm(card, w) {
+    var f = el('div', 'stack');
+    var inp = el('input', 'txin'); inp.placeholder = t('Transfer hash (optional)', 'Хеш перевода (необязательно)'); inp.spellcheck = false; inp.autocapitalize = 'off';
+    f.appendChild(inp);
+    f.appendChild(btn('primary', bi('Confirm: paid', 'Подтвердить: выплачено'), function () { wact('wpaid', w.id, { tx_hash: inp.value.trim() }); }));
+    card.appendChild(f);
+  }
+  async function wact(action, id, extra) {
+    var r = await adminCall(Object.assign({ action: action, id: id }, extra || {}));
+    if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Это уже взял или закрыл кто-то другой.')); } catch (e) {} }
+    else if (!r.ok) { haptic('error'); try { tg.showAlert(t('Could not save. Check the transfer hash and try again.', 'Не удалось сохранить. Проверьте хеш перевода и повторите.')); } catch (e) {} }
+    else haptic('success');
+    loadAdmin(false);
   }
   function renderMini(boxId, cardId, rows) {
     var box = $(boxId); box.innerHTML = ''; $(cardId).hidden = !rows.length;
@@ -395,11 +437,17 @@
   async function loadAdmin(full) {
     if (!staffRole) return;
     var q = await adminCall({ action: 'queue' });
-    if (q.ok) { admData.explorer = q.data.explorer || {}; renderQueue(q.data.items || []); }
+    var wq = await adminCall({ action: 'wqueue' });
+    var wres = wq.ok ? renderWQueue(wq.data.items || []) : { nNew: 0, nMine: 0, free: [] };
+    if (q.ok) { admData.explorer = q.data.explorer || {}; renderQueue(q.data.items || [], wres); }
     if (!full && $('tab-admin').hidden) return;
     var d = await adminCall({ action: 'done' });
     if (d.ok) renderMini('adm-done', 'adm-done-card', (d.data.items || []).map(function (x) {
-      return el('div', 'mini', '<span>' + (x.gg_id || '—') + ' · ' + Number(x.base_amount != null ? x.base_amount : x.amount) + ' USDT</span><span><b>' + (x.handled_name || '') + '</b> · ' + ago(x.handled_at) + '</span>');
+      return el('div', 'mini', '<span>' + (x.gg_id ? fid(x.gg_id) : '—') + ' · ' + Number(x.base_amount != null ? x.base_amount : x.amount) + ' USDT</span><span><b>' + (x.handled_name || '') + '</b> · ' + ago(x.handled_at) + '</span>');
+    }));
+    var wd = await adminCall({ action: 'wdone' });
+    if (wd.ok) renderMini('adm-wdone', 'adm-wdone-card', (wd.data.items || []).map(function (x) {
+      return el('div', 'mini', '<span>' + (x.gg_id ? fid(x.gg_id) : '—') + ' · ' + Number(x.amount) + ' USDT · ' + x.network + (x.status === 'rejected' ? ' · ' + t('rejected', 'отклонён') : '') + '</span><span><b>' + (x.handled_name || '') + '</b> · ' + ago(x.handled_at) + '</span>');
     }));
     var u = await adminCall({ action: 'unmatched' });
     if (u.ok) renderMini('adm-unm', 'adm-unm-card', (u.data.items || []).map(function (x) {

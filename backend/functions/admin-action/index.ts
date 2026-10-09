@@ -5,6 +5,7 @@
 //   done         -> last handled deposits
 //   claim        -> take a deposit ("I am sending these chips"); release -> give it back
 //   mark_sent    -> mark one deposit "chips sent" (only the person who took it, or the owner)
+//   wqueue / wdone / wclaim / wrelease / wpaid / wreject -> cash-out requests (same idea as deposits)
 //   unmatched    -> payments no request matches;  resolve -> mark one as handled
 //   staff_list / staff_add / staff_remove -> owner only
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -21,6 +22,18 @@ function cors(o: string | null): Record<string, string> {
   };
 }
 const out = (b: unknown, s: number, h: Record<string, string>) => new Response(JSON.stringify(b), { status: s, headers: h });
+
+async function tell(admin: ReturnType<typeof createClient>, userId: string, text: string) {
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!botToken) return;
+  const pu = await admin.auth.admin.getUserById(userId);
+  const tid = pu.data?.user?.user_metadata?.telegram_id;
+  if (!tid) return;
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: Number(tid), text, disable_web_page_preview: true }),
+  }).catch(() => {});
+}
 
 Deno.serve(async (req: Request) => {
   const h = cors(req.headers.get("origin"));
@@ -113,6 +126,64 @@ Deno.serve(async (req: Request) => {
 🎉 Фишки отправлены на ваш ID в ClubGG ${gg}. Удачной игры!` }),
       }).catch(() => {});
     }
+    return out({ ok: true }, 200, h);
+  }
+
+  // ---- cash-out requests ----
+  if (action === "wqueue" || action === "wdone") {
+    const pending = action === "wqueue";
+    const q = admin.from("withdrawals").select("id,amount,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
+    const { data: ws } = pending
+      ? await q.eq("status", "pending").order("created_at", { ascending: true }).limit(100)
+      : await q.in("status", ["paid", "rejected"]).order("handled_at", { ascending: false }).limit(15);
+    const rows = ws ?? [];
+    const ids = [...new Set(rows.map((w) => w.user_id))];
+    const prof = ids.length ? (await admin.from("profiles").select("user_id,gg_id").in("user_id", ids)).data ?? [] : [];
+    const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
+    return out({
+      items: rows.map((w) => ({
+        id: w.id, amount: w.amount, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
+        handled_at: w.handled_at, handled_name: w.handled_name, claimed_name: w.claimed_name, mine: w.claimed_by === u.user.id,
+        gg_id: gg.get(w.user_id) ?? null, tx_hash: w.tx_hash, note: w.note,
+      })),
+    }, 200, h);
+  }
+  if (action === "wclaim") {
+    const id = Number(body.id);
+    if (!Number.isInteger(id)) return out({ error: "bad id" }, 400, h);
+    const staleBefore = new Date(Date.now() - 30 * 60_000).toISOString();
+    const r = await admin.from("withdrawals").update({ claimed_by: u.user.id, claimed_name: myName, claimed_at: new Date().toISOString() })
+      .eq("id", id).eq("status", "pending").or(`claimed_by.is.null,claimed_by.eq.${u.user.id},claimed_at.lt.${staleBefore}`).select("id");
+    if (r.error) { console.error("wclaim:", r.error.message); return out({ error: "failed" }, 500, h); }
+    return (r.data?.length ?? 0) === 1 ? out({ ok: true }, 200, h) : out({ error: "taken" }, 409, h);
+  }
+  if (action === "wrelease") {
+    const id = Number(body.id);
+    if (!Number.isInteger(id)) return out({ error: "bad id" }, 400, h);
+    const q = admin.from("withdrawals").update({ claimed_by: null, claimed_name: null, claimed_at: null }).eq("id", id).eq("status", "pending");
+    await (role === "owner" ? q : q.eq("claimed_by", u.user.id));
+    return out({ ok: true }, 200, h);
+  }
+  if (action === "wpaid" || action === "wreject") {
+    const id = Number(body.id);
+    if (!Number.isInteger(id)) return out({ error: "bad id" }, 400, h);
+    const paid = action === "wpaid";
+    const tx = String(body.tx_hash ?? "").trim().slice(0, 140);
+    if (paid && tx && !/^[A-Za-z0-9+/=_:.-]{6,140}$/.test(tx)) return out({ error: "bad tx hash" }, 400, h);
+    const note = String(body.note ?? "").trim().slice(0, 300);
+    const q = admin.from("withdrawals").update({
+      status: paid ? "paid" : "rejected", tx_hash: paid && tx ? tx : null, note: note || null,
+      handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString(),
+    }).eq("id", id).eq("status", "pending");
+    // only the person who took it (or the owner) may finish it
+    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount,network,address");
+    if (r.error) { console.error(action + ":", r.error.message); return out({ error: "failed" }, 500, h); }
+    if ((r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
+    const w = r.data![0];
+    const short = w.address.length > 14 ? w.address.slice(0, 6) + "…" + w.address.slice(-6) : w.address;
+    await tell(admin, w.user_id, paid
+      ? `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}${tx ? "\nTransfer: " + tx : ""}\n\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}${tx ? "\nПеревод: " + tx : ""}`
+      : `⚠️ Your cash out of ${Number(w.amount)} USDT was not paid${note ? ": " + note : ""}. Please contact support.\n\n⚠️ Ваш вывод ${Number(w.amount)} USDT не выплачен${note ? ": " + note : ""}. Свяжитесь с поддержкой.`);
     return out({ ok: true }, 200, h);
   }
 

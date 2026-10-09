@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=4">
+<link rel="stylesheet" href="../assets/app.css?v=5">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -30,6 +30,7 @@
   <div class="nets" id="nets">
     <button type="button" data-net="TRC20" class="on">USDT · TRC20</button>
     <button type="button" data-net="BEP20">USDT · BEP20</button>
+    <button type="button" data-net="TON">USDT · TON</button>
   </div>
 
   <!-- ClubGG ID banner (shown until the player adds an ID) -->
@@ -48,7 +49,7 @@
     <!-- TRC20: a deposit request (exact amount, 30 minutes) -->
     <div id="trc-flow" class="stack">
       <form class="card" id="reqform" autocomplete="off">
-        <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b>USDT · TRC20</b></div>
+        <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b id="req-net">USDT · TRC20</b></div>
         <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id2">—</b></div>
         <label for="reqamt"><span class="en">Amount, USDT</span><span class="ru">Сумма, USDT</span></label>
         <input id="reqamt" inputmode="decimal" value="50" placeholder="50">
@@ -63,17 +64,22 @@
           <p class="paidsub" id="rv-paid-sub"></p>
         </div>
         <div class="card" id="rv-details">
-          <p class="payhint"><span class="en">Send exactly this amount on the TRC20 network. Do not round it.</span><span class="ru">Отправьте ровно эту сумму в сети TRC20. Не округляйте её.</span></p>
+          <p class="payhint"><span class="en">Send exactly this amount on the <b class="netname">TRC20</b> network. Do not round it.</span><span class="ru">Отправьте ровно эту сумму в сети <b class="netname">TRC20</b>. Не округляйте её.</span></p>
           <div class="row"><span class="muted"><span class="en">Request number</span><span class="ru">Номер заявки</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
           <div class="mono" id="rv-no">—</div>
           <div class="row"><span class="muted"><span class="en">Token</span><span class="ru">Токен</span></span><b>Tether USDT</b></div>
-          <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b>TRC20</b></div>
+          <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b class="netname">TRC20</b></div>
 
           <div class="row"><span class="muted"><span class="en">Wallet address</span><span class="ru">Адрес кошелька</span></span><button class="chip" type="button" data-copy-from="rv-addr"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
           <div class="addr" id="rv-addr">—</div>
 
           <div class="row"><span class="muted"><span class="en">Exact amount to send</span><span class="ru">Точная сумма перевода</span></span><button class="chip" type="button" data-copy-from="rv-amt"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
           <div class="amt"><span id="rv-amt">—</span> <small>USDT</small></div>
+
+          <div class="only-ton">
+            <div class="row"><span class="muted"><span class="en">Comment (recommended)</span><span class="ru">Комментарий (желательно)</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+            <p class="payhint"><span class="en">Paste the request number as the transfer comment. It helps us find your payment even if the amount is rounded.</span><span class="ru">Вставьте номер заявки в комментарий к переводу. Это поможет найти платёж, даже если сумма будет округлена.</span></p>
+          </div>
 
           <div class="qr" id="rv-qr"></div>
 
@@ -84,33 +90,15 @@
       </div>
     </div>
 
-    <!-- BEP20: personal address -->
-    <div id="bep-flow" class="stack" hidden>
-      <div class="card">
-        <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b id="dep-net">USDT · BEP20</b></div>
-        <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id">—</b></div>
-      </div>
-      <div class="card">
-        <div class="label"><span class="en">Your deposit address</span><span class="ru">Ваш адрес для депозита</span></div>
-        <div class="addr" id="addr">—</div>
-        <button class="btn primary" id="copy" type="button" disabled><span class="en">Copy address</span><span class="ru">Скопировать адрес</span></button>
-        <p class="hint" id="addr-note"></p>
-      </div>
-    </div>
-
-    <ol class="steps only-trc">
+    <ol class="steps">
       <li><span class="en">Enter the amount and create a request. You get an address and an <b>exact amount</b>.</span><span class="ru">Введите сумму и создайте заявку. Вы получите адрес и <b>точную сумму</b>.</span></li>
-      <li><span class="en">Send <b>exactly that amount</b> of USDT on the <b>TRC20</b> network within 30 minutes. The small tail of the amount identifies your payment, so do not round it.</span><span class="ru">Отправьте <b>ровно эту сумму</b> USDT в сети <b>TRC20</b> в течение 30 минут. Небольшой «хвост» суммы опознаёт ваш платёж, поэтому не округляйте её.</span></li>
+      <li><span class="en">Send <b>exactly that amount</b> of USDT on the <b class="netname">TRC20</b> network within 30 minutes. The small tail of the amount identifies your payment, so do not round it.</span><span class="ru">Отправьте <b>ровно эту сумму</b> USDT в сети <b class="netname">TRC20</b> в течение 30 минут. Небольшой «хвост» суммы опознаёт ваш платёж, поэтому не округляйте её.</span></li>
       <li><span class="en">Minimum deposit: <b class="mindep">10</b> USDT.</span><span class="ru">Минимальный депозит: <b class="mindep">10</b> USDT.</span></li>
-      <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
-    </ol>
-    <ol class="steps only-bep">
-      <li><span class="en">Send USDT <b>on the BEP20 network only</b> to the address above.</span><span class="ru">Отправьте USDT <b>только в сети BEP20</b> на адрес выше.</span></li>
-      <li><span class="en">Minimum deposit: <b class="mindep">10</b> USDT. Smaller amounts are not credited.</span><span class="ru">Минимальный депозит: <b class="mindep">10</b> USDT. Меньшие суммы не зачисляются.</span></li>
       <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
     </ol>
     <p class="hint only-trc"><span class="en">The sender pays the network fee. Sending from an exchange to TRC20 usually costs a few dollars.</span><span class="ru">Комиссию сети платит отправитель. Перевод с биржи в сети TRC20 обычно стоит несколько долларов.</span></p>
     <p class="hint only-bep"><span class="en">The sender pays the network fee. BEP20 transfers usually cost a few cents.</span><span class="ru">Комиссию сети платит отправитель. Переводы в сети BEP20 обычно стоят несколько центов.</span></p>
+    <p class="hint only-ton"><span class="en">The sender pays the network fee, usually a fraction of a cent. Your wallet may need a little TON for it.</span><span class="ru">Комиссию сети платит отправитель, обычно доли цента. Кошельку может понадобиться немного TON на комиссию.</span></p>
     <p class="hint warnx"><span class="en">Sending other coins or using another network means the funds are lost.</span><span class="ru">Другие монеты или другая сеть приведут к потере средств.</span></p>
   </section>
 
@@ -134,6 +122,7 @@
       <li><span class="en">Then file the request here. We pay out after the chips are received.</span><span class="ru">Затем оформите запрос здесь. Мы выплатим после получения фишек.</span></li>
       <li class="only-trc"><span class="en">The network fee is taken from the payout. On TRC20 it is usually a few dollars.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети TRC20 она обычно составляет несколько долларов.</span></li>
       <li class="only-bep"><span class="en">The network fee is taken from the payout. On BEP20 it is usually a few cents.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети BEP20 она обычно составляет несколько центов.</span></li>
+      <li class="only-ton"><span class="en">The network fee is taken from the payout. On TON it is a fraction of a cent.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети TON это доли цента.</span></li>
       <li><span class="en">Minimum withdrawal: <b class="minwd">10</b> USDT.</span><span class="ru">Минимальный вывод: <b class="minwd">10</b> USDT.</span></li>
     </ol>
   </section>
@@ -144,10 +133,15 @@
       <div><b id="adm-n-new">0</b><span><span class="en">Waiting</span><span class="ru">Ждут</span></span></div>
       <div><b id="adm-n-mine">0</b><span><span class="en">In work</span><span class="ru">В работе</span></span></div>
     </div>
+    <div class="stack" id="adm-wqueue"></div>
     <div class="stack" id="adm-queue"></div>
     <div class="card" id="adm-unm-card" hidden>
       <div class="label"><span class="en">Unidentified payments</span><span class="ru">Неопознанные платежи</span></div>
       <div class="stack" id="adm-unm"></div>
+    </div>
+    <div class="card" id="adm-wdone-card" hidden>
+      <div class="label"><span class="en">Cash outs done recently</span><span class="ru">Недавние выводы</span></div>
+      <div class="stack" id="adm-wdone"></div>
     </div>
     <div class="card" id="adm-done-card" hidden>
       <div class="label"><span class="en">Done recently</span><span class="ru">Недавно выполнено</span></div>
@@ -183,7 +177,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="../assets/config.js?v=4"></script>
-<script src="../assets/app.js?v=4"></script>
+<script src="../assets/config.js?v=5"></script>
+<script src="../assets/app.js?v=5"></script>
 </body>
 </html>

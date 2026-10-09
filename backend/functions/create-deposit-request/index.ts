@@ -1,13 +1,15 @@
-// Supabase Edge Function: creates a TRC20 deposit request for the signed-in player.
-// The player gets: a request number, a pool address, and an EXACT amount (their amount plus a
-// small unique tail). The tail identifies the payment, so one address can serve many players.
-// An address receives until it holds the "full" amount, then the next pool address takes over.
+// Supabase Edge Function: creates a deposit request for the signed-in player (TRC20, BEP20 or TON).
+// The player gets: a request number, an address, and an EXACT amount (their amount plus a small
+// unique tail). The tail identifies the payment, so one address can serve many players.
+//   TRC20 / BEP20: an address from the pool; it receives until it holds the "full" amount, then the next one.
+//   TON: the club wallet; the request number can also be written in the transfer comment.
 //
-// Settings (Secrets): XPUB_TRON (public key). The service never holds a key that can move money.
+// Settings (Secrets): XPUB_TRON, XPUB_EVM (public keys). This service never holds a key that can move money.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HDNodeWallet } from "https://esm.sh/ethers@6.13.4";
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
+const NETWORKS = ["TRC20", "BEP20", "TON"];
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 // ---- helpers (pure functions, unit-tested) ----
@@ -63,16 +65,19 @@ function base58(bytes: Uint8Array): string {
   return s;
 }
 async function sha256(b: Uint8Array): Promise<Uint8Array> { return new Uint8Array(await crypto.subtle.digest("SHA-256", b)); }
-async function tronAddress(xpub: string, index: number): Promise<string> {
+async function deriveAddress(network: string, xpub: string, index: number): Promise<string> {
   // deno-lint-ignore no-explicit-any
   const node: any = HDNodeWallet.fromExtendedKey(xpub).deriveChild(0).deriveChild(index);
-  const body = new Uint8Array(21);
+  if (network === "BEP20") return node.address;               // checksummed 0x address
+  const body = new Uint8Array(21);                              // TRON: 0x41 + the same 20 bytes, base58check
   body[0] = 0x41;
   for (let i = 0; i < 20; i++) body[i + 1] = parseInt(node.address.slice(2 + i * 2, 4 + i * 2), 16);
   const check = (await sha256(await sha256(body))).subarray(0, 4);
   const full = new Uint8Array(25); full.set(body); full.set(check, 21);
   return base58(full);
 }
+
+const COLS = "request_no,address,amount,base_amount,expires_at,status,network";
 
 Deno.serve(async (req: Request) => {
   const h = cors(req.headers.get("origin"));
@@ -88,16 +93,19 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return out({ error: "bad json" }, 400, h); }
+  const network = String(body.network ?? "TRC20");
+  if (!NETWORKS.includes(network)) return out({ error: "bad network" }, 400, h);
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-  const cfg = (await admin.from("chain_config").select("min_deposit,max_deposit,request_ttl_min").eq("network", "TRC20").maybeSingle()).data;
+  const cfg = (await admin.from("chain_config").select("enabled,min_deposit,max_deposit,request_ttl_min,receive_address").eq("network", network).maybeSingle()).data;
   if (!cfg) return out({ error: "not configured" }, 500, h);
 
-  // The player's own newest live request is returned instead of making a new one every time.
-  const live = await admin.from("deposit_requests").select("request_no,address,amount,base_amount,expires_at,status")
-    .eq("user_id", u.user.id).eq("network", "TRC20").eq("status", "open").gt("expires_at", new Date().toISOString())
+  // The player's own newest live request on this network is returned instead of making a new one every time.
+  const live = await admin.from("deposit_requests").select(COLS)
+    .eq("user_id", u.user.id).eq("network", network).eq("status", "open").gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (body.check === true) return out({ request: live.data ?? null }, 200, h);       // read-only: "do I have one?"
+  if (body.check === true) return out({ request: live.data ?? null }, 200, h);          // read-only: "do I have one?"
+  if (!cfg.enabled) return out({ error: "network disabled" }, 503, h);
   if (live.data && body.fresh !== true) return out({ request: live.data, existing: true }, 200, h);
   if (live.data) await admin.from("deposit_requests").update({ status: "expired", expires_at: new Date().toISOString() }).eq("request_no", live.data.request_no);
 
@@ -106,20 +114,27 @@ Deno.serve(async (req: Request) => {
   if (Number(base) < Number(cfg.min_deposit)) return out({ error: "below minimum", min: cfg.min_deposit }, 400, h);
   if (Number(base) > Number(cfg.max_deposit)) return out({ error: "above maximum", max: cfg.max_deposit }, 400, h);
 
-  // Which pool address receives now? The first one that is not full; make a new one if none.
-  let pool = (await admin.from("trc_pool").select("address").eq("status", "receiving").order("derivation_index").limit(1).maybeSingle()).data;
-  if (!pool) {
-    const rawKey = Deno.env.get("XPUB_TRON") ?? "";
-    const xpub = rawKey.match(/xpub[1-9A-HJ-NP-Za-km-z]{100,}/)?.[0];
-    if (!xpub) return out({ error: "not configured" }, 500, h);
-    const idx = await admin.rpc("next_pool_index");
-    if (idx.error || idx.data == null) { console.error("pool index:", idx.error?.message); return out({ error: "pool failed" }, 500, h); }
-    let address: string;
-    try { address = await tronAddress(xpub, Number(idx.data)); } catch (e) { console.error("derive:", String(e)); return out({ error: "derive failed" }, 500, h); }
-    const ins = await admin.from("trc_pool").insert({ derivation_index: Number(idx.data), address });
-    if (ins.error) console.error("pool insert:", ins.error.message);
-    pool = (await admin.from("trc_pool").select("address").eq("status", "receiving").order("derivation_index").limit(1).maybeSingle()).data;
-    if (!pool) return out({ error: "pool failed" }, 500, h);
+  // Where should the player pay?
+  let address: string | undefined;
+  if (network === "TON") {
+    address = cfg.receive_address ?? undefined;
+    if (!address) return out({ error: "not configured" }, 500, h);
+  } else {
+    const pick = () => admin.from("address_pool").select("address").eq("network", network).eq("status", "receiving").order("derivation_index").limit(1).maybeSingle();
+    address = (await pick()).data?.address;
+    if (!address) {
+      const rawKey = Deno.env.get(network === "TRC20" ? "XPUB_TRON" : "XPUB_EVM") ?? "";
+      const xpub = rawKey.match(/xpub[1-9A-HJ-NP-Za-km-z]{100,}/)?.[0];
+      if (!xpub) return out({ error: "not configured" }, 500, h);
+      const idx = await admin.rpc("next_pool_index");
+      if (idx.error || idx.data == null) { console.error("pool index:", idx.error?.message); return out({ error: "pool failed" }, 500, h); }
+      let fresh: string;
+      try { fresh = await deriveAddress(network, xpub, Number(idx.data)); } catch (e) { console.error("derive:", String(e)); return out({ error: "derive failed" }, 500, h); }
+      const ins = await admin.from("address_pool").insert({ network, derivation_index: Number(idx.data), address: fresh });
+      if (ins.error) console.error("pool insert:", ins.error.message);
+      address = (await pick()).data?.address;
+      if (!address) return out({ error: "pool failed" }, 500, h);
+    }
   }
 
   // Add the unique tail; if that exact amount is taken on this address, try another tail.
@@ -129,9 +144,9 @@ Deno.serve(async (req: Request) => {
     const amount = addTail(base, makeTail(rnd));
     const requestNo = makeRequestNo(Date.now(), crypto.getRandomValues(new Uint8Array(16)));
     const ins = await admin.from("deposit_requests").insert({
-      request_no: requestNo, user_id: u.user.id, network: "TRC20", address: pool.address,
+      request_no: requestNo, user_id: u.user.id, network, address,
       base_amount: base, amount, expires_at: expires,
-    }).select("request_no,address,amount,base_amount,expires_at,status").single();
+    }).select(COLS).single();
     if (!ins.error) return out({ request: ins.data }, 200, h);
     if (ins.error.code !== "23505") { console.error("request insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
   }

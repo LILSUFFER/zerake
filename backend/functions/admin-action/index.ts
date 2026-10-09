@@ -10,6 +10,8 @@
 //   staff_list / staff_add / staff_remove -> owner only
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const EXPLORER: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
+const txLinks = (net: string, hashes: string[]) => hashes.map((x) => (EXPLORER[net] ?? "") + x.trim()).join("\n");
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
 function cors(o: string | null): Record<string, string> {
   const a = o && ALLOWED.includes(o) ? o : ALLOWED[0];
@@ -223,13 +225,13 @@ Deno.serve(async (req: Request) => {
       handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString(),
     }).eq("id", id).in("status", paid ? ["approved", "sending"] : ["pending"]);   // pay only after the chips were taken
     // only the person who took it (or the owner) may finish it
-    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount,network,address");
+    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount,network,address,coin_amount");
     if (r.error) { console.error(action + ":", r.error.message); return out({ error: "failed" }, 500, h); }
     if ((r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
     const w = r.data![0];
     const short = w.address.length > 14 ? w.address.slice(0, 6) + "…" + w.address.slice(-6) : w.address;
     await tell(admin, w.user_id, paid
-      ? `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}${tx ? "\nTransfer: " + tx : ""}\n\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}${tx ? "\nПеревод: " + tx : ""}`
+      ? `✅ Cash out sent: ${w.coin_amount ? Number(w.coin_amount) + " GRAM" : Number(w.amount) + " USDT"} (${w.network}) to ${short}\n✅ Вывод отправлен: ${w.coin_amount ? Number(w.coin_amount) + " GRAM" : Number(w.amount) + " USDT"} (${w.network}) на ${short}${tx ? "\n\n" + txLinks(w.network, tx.split(",")) : ""}`
       : `⚠️ Your cash out of ${Number(w.amount)} USDT was not paid${note ? ": " + note : ""}. Please contact support.\n\n⚠️ Ваш вывод ${Number(w.amount)} USDT не выплачен${note ? ": " + note : ""}. Свяжитесь с поддержкой.`);
     return out({ ok: true }, 200, h);
   }

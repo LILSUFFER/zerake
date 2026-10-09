@@ -14,6 +14,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HDNodeWallet, Mnemonic, JsonRpcProvider, Wallet, Contract, SigningKey, TypedDataEncoder, parseUnits, formatUnits } from "https://esm.sh/ethers@6.13.4";
 
+const EXPLORER: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
+const txLinks = (net: string, hashes: string[]) => hashes.map((x) => (EXPLORER[net] ?? "") + x.trim()).join("\n");
 const TRON_API = "https://api.trongrid.io";
 const GAS_INDEX = 0;
 const TRX_KEEP = 30_000_000n;          // sun a paying TRON address must hold (≈30 TRX burns energy for one transfer)
@@ -220,7 +222,7 @@ async function finishGasfree(w: any, quiet = false): Promise<Response> {
   }
   await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hashes.join(","), note: null, handled_at: new Date().toISOString() }).eq("id", w.id).eq("status", "sending");
   const short = w.address.slice(0, 6) + "…" + w.address.slice(-6);
-  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\nTransfer: ${hashes.join(", ")}\n\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\nПеревод: ${hashes.join(", ")}`);
+  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\n\n${txLinks(w.network, hashes)}`);
   return out({ ok: true, hashes });
 }
 
@@ -351,7 +353,7 @@ Deno.serve(async (req: Request) => {
 
   await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hashes.join(","), handled_at: new Date().toISOString() }).eq("id", id);
   const short = w.address.slice(0, 6) + "…" + w.address.slice(-6);
-  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\nTransfer: ${hashes.join(", ")}\n\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\nПеревод: ${hashes.join(", ")}`);
+  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\n\n${txLinks(w.network, hashes)}`);
   return out({ ok: true, hashes });
 });
 

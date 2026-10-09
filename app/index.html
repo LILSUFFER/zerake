@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Zerake</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/app.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body data-lang="en">
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<main id="app" hidden>
+  <header class="top">
+    <h1>Zerake</h1>
+    <div class="who" id="who"></div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="deposit" class="on"><span class="en">Deposit</span><span class="ru">Депозит</span></button>
+    <button role="tab" data-tab="withdraw"><span class="en">Withdraw</span><span class="ru">Вывод</span></button>
+    <button role="tab" data-tab="history"><span class="en">History</span><span class="ru">История</span></button>
+  </nav>
+
+  <!-- ClubGG ID banner (shown until the player adds an ID) -->
+  <section id="noid" class="card warn" hidden>
+    <b><span class="en">Add your ClubGG ID first</span><span class="ru">Сначала добавьте ID в ClubGG</span></b>
+    <p>
+      <span class="en">We send chips to this ID. Open zerake.com in your browser, sign in and enter it in the account menu.</span>
+      <span class="ru">Фишки отправляются на этот ID. Откройте zerake.com в браузере, войдите и введите его в меню аккаунта.</span>
+    </p>
+    <button class="btn" id="open-site" type="button"><span class="en">Open zerake.com</span><span class="ru">Открыть zerake.com</span></button>
+  </section>
+
+  <!-- Deposit -->
+  <section id="tab-deposit" class="pane">
+    <div class="card">
+      <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b>USDT · TRC20</b></div>
+      <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id">—</b></div>
+    </div>
+
+    <div class="card">
+      <div class="label"><span class="en">Your deposit address</span><span class="ru">Ваш адрес для депозита</span></div>
+      <div class="addr" id="addr">—</div>
+      <button class="btn primary" id="copy" type="button" disabled><span class="en">Copy address</span><span class="ru">Скопировать адрес</span></button>
+      <p class="hint" id="addr-note"></p>
+    </div>
+
+    <ol class="steps">
+      <li><span class="en">Send USDT <b>on the TRC20 network only</b> to the address above.</span><span class="ru">Отправьте USDT <b>только в сети TRC20</b> на адрес выше.</span></li>
+      <li><span class="en">Minimum deposit: <b id="min-dep">10</b> USDT. Smaller amounts are not credited.</span><span class="ru">Минимальный депозит: <b id="min-dep-ru">10</b> USDT. Меньшие суммы не зачисляются.</span></li>
+      <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
+    </ol>
+    <p class="hint warnx"><span class="en">Sending other coins or using another network means the funds are lost.</span><span class="ru">Другие монеты или другая сеть приведут к потере средств.</span></p>
+  </section>
+
+  <!-- Withdraw -->
+  <section id="tab-withdraw" class="pane" hidden>
+    <form class="card" id="wform" autocomplete="off">
+      <div class="row"><span class="muted"><span class="en">Chips from ID</span><span class="ru">Фишки с ID</span></span><b class="green" id="wd-id">—</b></div>
+
+      <label for="wamt"><span class="en">Amount, USDT</span><span class="ru">Сумма, USDT</span></label>
+      <input id="wamt" inputmode="decimal" placeholder="50">
+
+      <label for="waddr"><span class="en">TRC20 address</span><span class="ru">Адрес TRC20</span></label>
+      <input id="waddr" placeholder="T..." spellcheck="false" autocapitalize="off">
+
+      <p class="note" id="wmsg" hidden></p>
+      <button class="btn primary" type="submit" id="wsubmit"><span class="en">Request withdrawal</span><span class="ru">Запросить вывод</span></button>
+    </form>
+
+    <ol class="steps">
+      <li><span class="en">First send the chips back to the club in the ClubGG app.</span><span class="ru">Сначала верните фишки клубу в приложении ClubGG.</span></li>
+      <li><span class="en">Then file the request here. We pay out after the chips are received.</span><span class="ru">Затем оформите запрос здесь. Мы выплатим после получения фишек.</span></li>
+    </ol>
+  </section>
+
+  <!-- History -->
+  <section id="tab-history" class="pane" hidden>
+    <div id="hist" class="list"></div>
+  </section>
+
+  <footer class="foot">
+    <button class="linkbtn" id="lang" type="button">RU</button>
+    <span class="muted">zerake.com</span>
+  </footer>
+</main>
+
+<div id="splash" class="splash">
+  <div class="spin"></div>
+  <p id="splash-msg"></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/config.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

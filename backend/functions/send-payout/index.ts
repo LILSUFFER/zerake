@@ -12,7 +12,7 @@
 //
 // Secrets: WALLET_MNEMONIC (the seed of the deposit addresses), optional TRONGRID_API_KEY.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { HDNodeWallet, Mnemonic, JsonRpcProvider, Wallet, Contract, SigningKey, parseUnits, formatUnits } from "https://esm.sh/ethers@6.13.4";
+import { HDNodeWallet, Mnemonic, JsonRpcProvider, Wallet, Contract, SigningKey, TypedDataEncoder, parseUnits, formatUnits } from "https://esm.sh/ethers@6.13.4";
 
 const TRON_API = "https://api.trongrid.io";
 const GAS_INDEX = 0;
@@ -55,6 +55,27 @@ function tronSign(txID: string, privateKey: string): string {
   const sig = new SigningKey(privateKey).sign("0x" + txID);
   return sig.r.slice(2) + sig.s.slice(2) + sig.v.toString(16).padStart(2, "0");
 }
+/** TRON base58 address -> 0x + 20 bytes (how TIP-712 encodes an address). */
+function tronToHex(addr: string): string {
+  const raw = b58decode(addr);
+  if (raw.length !== 25 || raw[0] !== 0x41) throw new Error("bad tron address");
+  return "0x" + Array.from(raw.subarray(1, 21), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+/** GasFree transfer authorisation (TIP-712, mainnet), signed by the pool key; returns hex without 0x. */
+function gasfreeSign(m: { token: string; serviceProvider: string; user: string; receiver: string; value: bigint; maxFee: bigint; deadline: number; nonce: number }, privateKey: string): string {
+  const domain = { name: "GasFreeController", version: "V1.0.0", chainId: 728126428, verifyingContract: tronToHex("TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U") };
+  const types = { PermitTransfer: [
+    { name: "token", type: "address" }, { name: "serviceProvider", type: "address" }, { name: "user", type: "address" },
+    { name: "receiver", type: "address" }, { name: "value", type: "uint256" }, { name: "maxFee", type: "uint256" },
+    { name: "deadline", type: "uint256" }, { name: "version", type: "uint256" }, { name: "nonce", type: "uint256" },
+  ] };
+  const digest = TypedDataEncoder.hash(domain, types, {
+    token: tronToHex(m.token), serviceProvider: tronToHex(m.serviceProvider), user: tronToHex(m.user), receiver: tronToHex(m.receiver),
+    value: m.value, maxFee: m.maxFee, deadline: m.deadline, version: 1, nonce: m.nonce,
+  });
+  const sig = new SigningKey(privateKey).sign(digest);
+  return sig.r.slice(2) + sig.s.slice(2) + sig.v.toString(16).padStart(2, "0");
+}
 /** Choose paying addresses: the smallest one that covers everything, else largest first. */
 function planSources(bal: { address: string; index: number; units: bigint }[], need: bigint): { address: string; index: number; units: bigint }[] | null {
   const have = bal.filter((b) => b.units > 0n);
@@ -71,6 +92,33 @@ function planSources(bal: { address: string; index: number; units: bigint }[], n
 }
 // ---- end helpers ----
 
+
+// ---- GasFree API (TRON transfers without TRX; the fee is paid in USDT) ----
+const GASFREE_API = "https://open.gasfree.io";
+const GASFREE_PREFIX = "/tron";
+async function gasfree(method: "GET" | "POST", path: string, body?: unknown): Promise<any> {   // deno-lint-ignore no-explicit-any
+  const key = Deno.env.get("GASFREE_API_KEY"), secret = Deno.env.get("GASFREE_API_SECRET");
+  if (!key || !secret) throw new Error("GasFree keys are not set");
+  const ts = Math.floor(Date.now() / 1000);
+  const full = GASFREE_PREFIX + path;
+  const mac = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign("HMAC", mac, new TextEncoder().encode(method + full + ts)))));
+  const r = await fetch(GASFREE_API + full, {
+    method, headers: { "Content-Type": "application/json", Timestamp: String(ts), Authorization: `ApiKey ${key}:${sig}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (d.code !== 200) throw new Error(`gasfree ${path}: ${d.reason ?? r.status} ${d.message ?? ""}`.trim());
+  return d.data;
+}
+const gasfreeOn = () => !!(Deno.env.get("GASFREE_API_KEY") && Deno.env.get("GASFREE_API_SECRET"));
+
+async function usdtBalanceOf(addr: string, usdt: string): Promise<bigint> {
+  const r = await tron("/wallet/triggerconstantcontract", { owner_address: addr, contract_address: usdt, function_selector: "balanceOf(address)", parameter: tronToHex(addr).slice(2).padStart(64, "0"), visible: true });
+  const hex = r.constant_result?.[0];
+  if (!hex) throw new Error("balance check failed");
+  return BigInt("0x" + hex);
+}
 const out = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -103,18 +151,91 @@ async function tronBroadcast(tx: Record<string, unknown>, key: string): Promise<
   return String(tx.txID);
 }
 
+// deno-lint-ignore no-explicit-any
+let admin: any, node: (coin: number, i: number) => HDNodeWallet, back: (reason: string) => Promise<Response>;
+
+/** TRC20 payout through GasFree: sign one authorisation per paying address, submit, wait for the chain. */
+// deno-lint-ignore no-explicit-any
+async function payGasfree(w: any, cfg: any, need: bigint, pool: any[]): Promise<Response> {
+  const traces: string[] = [];
+  try {
+    const provider = (await gasfree("GET", "/api/v1/config/provider/all")).providers?.[0];
+    if (!provider) return await back("GasFree: no service provider");
+    // what each GasFree address can pay: balance - pending - fee
+    const bal: { address: string; index: number; units: bigint; eoa: string; fee: bigint; nonce: number }[] = [];
+    for (const p of pool) {
+      const eoa = await tronFromEvm(node(195, Number(p.derivation_index)).address);
+      const info = await gasfree("GET", `/api/v1/address/${eoa}`);
+      if (info.gasFreeAddress !== p.address) throw new Error("wallet key does not match the deposit addresses");
+      const a = (info.assets ?? []).find((x: { tokenAddress: string }) => x.tokenAddress === cfg.usdt_contract);
+      const fee = BigInt(a?.transferFee ?? 2_000_000) + (info.active ? 0n : BigInt(a?.activateFee ?? 2_000_000));
+      const free = (await usdtBalanceOf(p.address, cfg.usdt_contract)) - BigInt(a?.frozen ?? 0) - fee;
+      if (info.allowSubmit !== false && free > 0n) bal.push({ address: p.address, index: Number(p.derivation_index), units: free, eoa, fee, nonce: Number(info.nonce ?? 0) });
+      await sleep(150);
+    }
+    const plan = planSources(bal, need);
+    if (!plan) return await back("not enough USDT on the deposit addresses (after the GasFree fee)");
+    for (const part of plan) {
+      const src = bal.find((b) => b.address === part.address)!;
+      const deadline = Math.floor(Date.now() / 1000) + Number(provider.config?.defaultDeadlineDuration ?? 180);
+      const msg = { token: cfg.usdt_contract, serviceProvider: provider.address, user: src.eoa, receiver: w.address, value: part.units, maxFee: src.fee, deadline, nonce: src.nonce };
+      const sig = gasfreeSign(msg, node(195, src.index).privateKey);
+      const r = await gasfree("POST", "/api/v1/gasfree/submit", { ...msg, value: Number(part.units), maxFee: Number(src.fee), version: 1, sig });
+      traces.push(r.id);
+    }
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e).slice(0, 250);
+    console.error("gasfree payout", w.id, msg);
+    if (!traces.length) return await back("auto payout failed: " + msg);
+    await admin.from("withdrawals").update({ note: "gf:" + traces.join(",") + " | stopped: " + msg }).eq("id", w.id);
+    await alertStaff(admin, `⚠️ Auto payout #${w.id} stopped halfway (GasFree ${traces.join(", ")}). Error: ${msg}\nCheck it by hand.`);
+    return out({ ok: false, reason: "stopped halfway, check by hand" });
+  }
+  await admin.from("withdrawals").update({ note: "gf:" + traces.join(",") }).eq("id", w.id);
+  for (let i = 0; i < 12; i++) {                    // usually on chain within a minute
+    await sleep(5000);
+    const res = await finishGasfree({ ...w, note: "gf:" + traces.join(",") }, true);
+    if (res) return res;
+  }
+  return out({ ok: true, pending: true, reason: "sent to GasFree, waiting for the chain" });
+}
+
+/** Look at the GasFree authorisations of a payout; mark it paid when all are on chain. */
+// deno-lint-ignore no-explicit-any
+async function finishGasfree(w: any, quiet = false): Promise<Response> {
+  const traces = String(w.note).slice(3).split(" | ")[0].split(",").filter(Boolean);
+  const hashes: string[] = [];
+  for (const t of traces) {
+    const s = await gasfree("GET", `/api/v1/gasfree/${t}`);
+    if (s.state === "FAILED") {
+      if (traces.length === 1) {
+        await admin.from("withdrawals").update({ status: "approved", note: "GasFree transfer failed, nothing was sent" }).eq("id", w.id).eq("status", "sending");
+        return out({ ok: false, reason: "GasFree transfer failed, nothing was sent" });
+      }
+      await alertStaff(admin, `⚠️ Auto payout #${w.id}: one GasFree part failed (${t}). Check it by hand.`);
+      return out({ ok: false, reason: "one part failed, check by hand" });
+    }
+    if (s.state !== "SUCCEED" || !s.txnHash) return quiet ? (null as unknown as Response) : out({ ok: true, pending: true, reason: "still on its way" });
+    hashes.push(s.txnHash);
+  }
+  await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hashes.join(","), note: null, handled_at: new Date().toISOString() }).eq("id", w.id).eq("status", "sending");
+  const short = w.address.slice(0, 6) + "…" + w.address.slice(-6);
+  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\nTransfer: ${hashes.join(", ")}\n\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\nПеревод: ${hashes.join(", ")}`);
+  return out({ ok: true, hashes });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return out({ error: "method" }, 405);
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   if ((req.headers.get("authorization") ?? "") !== "Bearer " + serviceKey) return out({ error: "forbidden" }, 403);
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false } });
+  admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false } });
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return out({ error: "bad json" }, 400); }
 
   const phrase = (Deno.env.get("WALLET_MNEMONIC") ?? "").trim().replace(/\s+/g, " ");
   let mn: Mnemonic | null = null;
   try { if (phrase) mn = Mnemonic.fromPhrase(phrase); } catch { mn = null; }
-  const node = (coin: number, i: number) => HDNodeWallet.fromMnemonic(mn!, `m/44'/${coin}'/0'/0/${i}`);
+  node = (coin: number, i: number) => HDNodeWallet.fromMnemonic(mn!, `m/44'/${coin}'/0'/0/${i}`);
   const cfgs = (await admin.from("chain_config").select("network,rpc_url,usdt_contract,decimals,auto_max,auto_daily")).data ?? [];
   const cfgOf = (n: string) => cfgs.find((c) => c.network === n)!;
 
@@ -126,8 +247,8 @@ Deno.serve(async (req: Request) => {
       const t = cfgOf("TRC20"); const ga = await tronFromEvm(node(195, GAS_INDEX).address);
       const g = await tronAccount(ga, t.usdt_contract);
       const pool = (await admin.from("address_pool").select("address").eq("network", "TRC20")).data ?? [];
-      let total = 0n; for (const p of pool) { total += (await tronAccount(p.address, t.usdt_contract)).usdt; await sleep(120); }
-      res.TRC20 = { gas_address: ga, gas_balance: formatUnits(g.trx, 6) + " TRX", pool_usdt: formatUnits(total, t.decimals) };
+      let total = 0n; for (const p of pool) { total += await usdtBalanceOf(p.address, t.usdt_contract); await sleep(120); }
+      res.TRC20 = { gasfree: gasfreeOn(), gas_address: ga, gas_balance: formatUnits(g.trx, 6) + " TRX", pool_usdt: formatUnits(total, t.decimals) };
     } catch (e) { res.TRC20 = { error: String(e) }; }
     try {
       const b = cfgOf("BEP20"); const p = new JsonRpcProvider(b.rpc_url, 56, { staticNetwork: true });
@@ -142,9 +263,12 @@ Deno.serve(async (req: Request) => {
   // ---- pay one cash out ----
   const id = Number(body.id);
   if (!Number.isInteger(id)) return out({ error: "bad id" }, 400);
-  const w = (await admin.from("withdrawals").select("id,user_id,amount,network,address,status").eq("id", id).maybeSingle()).data;
+  const w = (await admin.from("withdrawals").select("id,user_id,amount,network,address,status,note").eq("id", id).maybeSingle()).data;
+  if (w && w.status === "sending" && String(w.note ?? "").startsWith("gf:")) {
+    try { return await finishGasfree(w); } catch (e) { return out({ ok: false, reason: String(e) }); }
+  }
   if (!w || w.status !== "approved") return out({ ok: false, reason: "not ready" });
-  const back = async (reason: string) => {           // nothing was sent: hand it back to the managers
+  back = async (reason: string) => {           // nothing was sent: hand it back to the managers
     await admin.from("withdrawals").update({ status: "approved", note: reason }).eq("id", id).eq("status", "sending");
     return out({ ok: false, reason });
   };
@@ -166,8 +290,9 @@ Deno.serve(async (req: Request) => {
     const chk = (await sha256(await sha256(raw.subarray(0, 21)))).subarray(0, 4);
     if (raw.length !== 25 || chk.some((b, i) => b !== raw[21 + i])) return await back("the player's address is not valid (checksum)");
   }
-  const pool = (await admin.from("address_pool").select("address,derivation_index").eq("network", w.network)).data ?? [];
+  const pool = (await admin.from("address_pool").select("address,derivation_index,kind").eq("network", w.network)).data ?? [];
   const hashes: string[] = [];
+  if (w.network === "TRC20" && gasfreeOn() && pool.some((p) => p.kind === "gasfree")) return await payGasfree(w, cfg, need, pool.filter((p) => p.kind === "gasfree"));
   try {
     if (w.network === "TRC20") {
       const bal = [];

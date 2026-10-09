@@ -421,9 +421,11 @@
       if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + w.claimed_name));
       var b = el('div', 'tbtns');
       if (w.status === 'sending') {
-        card.appendChild(el('div', w.note ? 'note bad' : 'tstat', w.note ? '' : bi('Sending USDT automatically…', 'USDT отправляются автоматически…')));
-        if (w.note) card.lastChild.textContent = w.note;
-        if (staffRole === 'owner') b.appendChild(btn('', bi('Checked: it was paid', 'Проверил: выплачено'), function () { payForm(card, w); }));
+        var gf = w.note && w.note.indexOf('gf:') === 0;
+        card.appendChild(el('div', w.note && !gf ? 'note bad' : 'tstat', w.note && !gf ? '' : bi('Sending USDT automatically…', 'USDT отправляются автоматически…')));
+        if (w.note && !gf) card.lastChild.textContent = w.note;
+        b.appendChild(btn('primary', bi('Check status', 'Проверить статус'), function () { wact('wretry', w.id); }));
+        if (staffRole === 'owner') { b.className = 'tbtns two'; b.appendChild(btn('', bi('Checked: it was paid', 'Проверил: выплачено'), function () { payForm(card, w); })); }
       } else if (w.status === 'approved') {
         var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note || t('not started yet', 'ещё не запускалась'));
         card.appendChild(why);

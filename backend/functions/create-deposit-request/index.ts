@@ -77,6 +77,27 @@ async function deriveAddress(network: string, xpub: string, index: number): Prom
   return base58(full);
 }
 
+
+// ---- GasFree (TRON transfers without TRX; the fee is paid in USDT) ----
+const GASFREE_API = "https://open.gasfree.io";
+const GASFREE_PREFIX = "/tron";
+async function gasfree(method: "GET" | "POST", path: string, body?: unknown): Promise<any> {   // deno-lint-ignore no-explicit-any
+  const key = Deno.env.get("GASFREE_API_KEY"), secret = Deno.env.get("GASFREE_API_SECRET");
+  if (!key || !secret) throw new Error("GasFree keys are not set");
+  const ts = Math.floor(Date.now() / 1000);
+  const full = GASFREE_PREFIX + path;
+  const mac = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign("HMAC", mac, new TextEncoder().encode(method + full + ts)))));
+  const r = await fetch(GASFREE_API + full, {
+    method, headers: { "Content-Type": "application/json", Timestamp: String(ts), Authorization: `ApiKey ${key}:${sig}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (d.code !== 200) throw new Error(`gasfree ${path}: ${d.reason ?? r.status} ${d.message ?? ""}`.trim());
+  return d.data;
+}
+const gasfreeOn = () => !!(Deno.env.get("GASFREE_API_KEY") && Deno.env.get("GASFREE_API_SECRET"));
+
 const COLS = "request_no,address,amount,base_amount,expires_at,status,network";
 
 Deno.serve(async (req: Request) => {
@@ -120,7 +141,9 @@ Deno.serve(async (req: Request) => {
     address = cfg.receive_address ?? undefined;
     if (!address) return out({ error: "not configured" }, 500, h);
   } else {
-    const pick = () => admin.from("address_pool").select("address").eq("network", network).eq("status", "receiving").order("derivation_index").limit(1).maybeSingle();
+    // TRC20 with GasFree: players pay to the GasFree address of a pool key, so payouts need no TRX.
+    const kind = network === "TRC20" && gasfreeOn() ? "gasfree" : "eoa";
+    const pick = () => admin.from("address_pool").select("address").eq("network", network).eq("status", "receiving").eq("kind", kind).order("derivation_index").limit(1).maybeSingle();
     address = (await pick()).data?.address;
     if (!address) {
       const rawKey = Deno.env.get(network === "TRC20" ? "XPUB_TRON" : "XPUB_EVM") ?? "";
@@ -130,7 +153,13 @@ Deno.serve(async (req: Request) => {
       if (idx.error || idx.data == null) { console.error("pool index:", idx.error?.message); return out({ error: "pool failed" }, 500, h); }
       let fresh: string;
       try { fresh = await deriveAddress(network, xpub, Number(idx.data)); } catch (e) { console.error("derive:", String(e)); return out({ error: "derive failed" }, 500, h); }
-      const ins = await admin.from("address_pool").insert({ network, derivation_index: Number(idx.data), address: fresh });
+      let row: Record<string, unknown> = { network, derivation_index: Number(idx.data), address: fresh, eoa_address: fresh, kind };
+      if (kind === "gasfree") {
+        try { row = { ...row, address: (await gasfree("GET", `/api/v1/address/${fresh}`)).gasFreeAddress }; }
+        catch (e) { console.error("gasfree address:", String(e)); return out({ error: "pool failed" }, 500, h); }
+        if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(row.address))) return out({ error: "pool failed" }, 500, h);
+      }
+      const ins = await admin.from("address_pool").insert(row);
       if (ins.error) console.error("pool insert:", ins.error.message);
       address = (await pick()).data?.address;
       if (!address) return out({ error: "pool failed" }, 500, h);

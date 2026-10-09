@@ -127,8 +127,8 @@
   </p>
 
   <div class="actions">
-    <button class="btn primary" type="button"><span class="ru">Депозит</span><span class="en">Deposit</span></button>
-    <button class="btn" type="button"><span class="ru">Вывод</span><span class="en">Withdraw</span></button>
+    <button class="btn primary" type="button" id="btn-get"><span class="ru">Получить фишки</span><span class="en">Get chips</span></button>
+    <button class="btn" type="button" id="btn-out"><span class="ru">Снять фишки</span><span class="en">Cash out chips</span></button>
   </div>
 
   <div class="card">
@@ -178,6 +178,53 @@
   }
   addEventListener('resize', resize);
   resize(); requestAnimationFrame(draw);
+</script>
+
+<div class="zmodal" id="botmodal" hidden>
+  <div class="zbackdrop" data-close></div>
+  <div class="zdialog" role="dialog" aria-modal="true" aria-labelledby="bm-title">
+    <button class="zclose" type="button" data-close aria-label="Close">&times;</button>
+    <h2 id="bm-title"></h2>
+    <p class="zsub"><span class="en">Everything happens in our Telegram bot. It takes about a minute.</span><span class="ru">Всё происходит в нашем Telegram-боте. Это займёт около минуты.</span></p>
+    <ol class="bmsteps">
+      <li><span class="en">Open the bot and press <b>Start</b>.</span><span class="ru">Откройте бота и нажмите <b>Start</b>.</span></li>
+      <li><span class="en">Tap the <b>Zerake</b> button next to the message field.</span><span class="ru">Нажмите кнопку <b>Zerake</b> рядом с полем ввода сообщения.</span></li>
+      <li id="bm-step3"></li>
+    </ol>
+    <div class="zbtns">
+      <a class="zbtn telegram" id="bm-open" href="https://t.me/zerakebot" target="_blank" rel="noopener">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M21.94 4.34 18.7 19.6c-.24 1.08-.88 1.35-1.78.84l-4.92-3.63-2.37 2.29c-.26.26-.48.48-.99.48l.35-5.01 9.12-8.24c.4-.35-.09-.55-.61-.2L6.2 13.22 1.34 11.7c-1.06-.33-1.08-1.06.22-1.57L20.58 2.8c.88-.32 1.65.2 1.36 1.54z"/></svg>
+        <span class="en">Open the bot</span><span class="ru">Открыть бота</span>
+      </a>
+    </div>
+    <p class="zfoot"><span class="en">Only this bot is official: @zerakebot</span><span class="ru">Официальный бот только этот: @zerakebot</span></p>
+  </div>
+</div>
+<style>
+  .bmsteps { margin: 0 0 20px; padding: 0 0 0 20px; text-align: left; color: var(--fg-soft); font-size: 15px; display: grid; gap: 8px; }
+  .bmsteps b { color: var(--fg); font-weight: 500; }
+  a.zbtn { text-decoration: none; }
+</style>
+<script>
+  (function () {
+    var m = document.getElementById('botmodal');
+    var T = {
+      get: ['<span class="en">Get chips</span><span class="ru">Получить фишки</span>',
+            '<span class="en">Choose <b>Deposit</b>, enter the amount and follow the instructions.</span><span class="ru">Выберите <b>Депозит</b>, введите сумму и следуйте инструкции.</span>'],
+      out: ['<span class="en">Cash out chips</span><span class="ru">Снять фишки</span>',
+            '<span class="en">Choose <b>Withdraw</b>, enter the amount and your wallet address.</span><span class="ru">Выберите <b>Вывод</b>, введите сумму и адрес кошелька.</span>']
+    };
+    function open(k) {
+      document.getElementById('bm-title').innerHTML = T[k][0];
+      document.getElementById('bm-step3').innerHTML = T[k][1];
+      m.hidden = false; document.body.style.overflow = 'hidden';
+    }
+    function close() { m.hidden = true; document.body.style.overflow = ''; }
+    document.getElementById('btn-get').addEventListener('click', function () { open('get'); });
+    document.getElementById('btn-out').addEventListener('click', function () { open('out'); });
+    m.addEventListener('click', function (e) { if (e.target.hasAttribute('data-close')) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !m.hidden) close(); });
+  })();
 </script>
 <script src="assets/config.js"></script>
 <script src="assets/auth.js"></script>

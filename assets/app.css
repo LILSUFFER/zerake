@@ -337,3 +337,13 @@ body[data-tab="settings"] #pinprompt, body[data-tab="settings"] #nocode, body[da
 .secret:not(.open) .bigcode { filter: blur(7px); user-select: none; }
 .secret .sh { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: var(--fg); background: rgba(13,14,16,.25); pointer-events: none; transition: opacity .2s; }
 .secret.open .sh { opacity: 0; }
+
+.phrasein { font: 500 15px/1.5 ui-monospace, Consolas, monospace; color: var(--fg); width: 100%; background: var(--card-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; resize: vertical; }
+.phrasein:focus { outline: none; border-color: var(--green-line); }
+.words { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; width: 100%; text-align: left; }
+.words span { font: 500 14px ui-monospace, Consolas, monospace; color: var(--fg); padding: 6px 8px; border-radius: 8px; background: var(--card-3); white-space: nowrap; }
+.words span i { font-style: normal; color: var(--dim); margin-right: 6px; font-size: 11px; }
+.secret .bigcode.words { font-size: 14px; }
+@media (max-width: 380px) { .words { grid-template-columns: repeat(2, 1fr); } }
+
+.secret:has(.words) .sk { display: none; }

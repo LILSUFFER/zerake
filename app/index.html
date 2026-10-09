@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=32">
+<link rel="stylesheet" href="../assets/app.css?v=35">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -50,15 +50,16 @@
   </section>
   <!-- no recovery code yet -->
   <section id="nocode" class="card warnbox" hidden>
-    <b class="ctitle">🔑 <span class="en">Create your recovery code</span><span class="ru">Создайте код восстановления</span></b>
-    <p class="payhint"><span class="en">It lets you change your wallet in an emergency.</span><span class="ru">Он нужен, чтобы сменить кошелёк в экстренном случае.</span></p>
-    <button class="btn" id="newcodebtn" type="button"><span class="en">Create code</span><span class="ru">Создать код</span></button>
+    <b class="ctitle">🔑 <span class="en">Create your secret phrase</span><span class="ru">Создайте секретную фразу</span></b>
+    <p class="payhint"><span class="en">It restores your account and lets you change your wallet.</span><span class="ru">С ней можно восстановить аккаунт и сменить кошелёк.</span></p>
+    <button class="btn" id="newcodebtn" type="button"><span class="en">Create phrase</span><span class="ru">Создать фразу</span></button>
   </section>
 
   <!-- ClubGG ID banner (shown until the player adds an ID) -->
   <section id="noid" class="card warn" hidden>
     <b class="ctitle"><span class="en">Add your ClubGG ID first</span><span class="ru">Сначала добавьте ID в ClubGG</span></b>
     <p><span class="en">We send chips to this ID and take them from it for cash outs. Enter it in Settings.</span><span class="ru">На этот ID приходят фишки и с него списываются при выводе. Укажите его в настройках.</span></p>
+    <button class="linkish" id="open-restore" type="button" style="justify-self:start"><span class="en">Played before on another Telegram? Restore with the secret phrase</span><span class="ru">Играли раньше с другого Telegram? Восстановить по секретной фразе</span></button>
     <button class="btn" id="open-site" type="button"><span class="en">Enter ClubGG ID</span><span class="ru">Указать ID в ClubGG</span></button>
   </section>
 
@@ -69,7 +70,7 @@
         <h2 class="ctitle"><span class="en">Bind your <span class="chainname">Tron</span> wallet</span><span class="ru">Привяжите кошелёк <span class="chainname">Tron</span></span></h2>
         <span class="pill">🔒</span>
       </div>
-      <p class="payhint"><span class="en">Before the first deposit, tell us the wallet you will pay from. Cash outs on this network go <b>only</b> to it, so even if someone gets into your account they cannot take the money. You can change it later only with your recovery code (takes 48 hours).</span><span class="ru">Перед первым депозитом укажите кошелёк, с которого будете пополнять. Выводы в этой сети уходят <b>только</b> на него, поэтому даже если кто-то получит доступ к аккаунту, забрать деньги он не сможет. Сменить кошелёк можно только с кодом восстановления (через 48 часов).</span></p>
+      <p class="payhint"><span class="en">Before the first deposit, tell us the wallet you will pay from. Cash outs on this network go <b>only</b> to it, so even if someone gets into your account they cannot take the money. You can change it later only with your secret phrase (takes 48 hours).</span><span class="ru">Перед первым депозитом укажите кошелёк, с которого будете пополнять. Выводы в этой сети уходят <b>только</b> на него, поэтому даже если кто-то получит доступ к аккаунту, забрать деньги он не сможет. Сменить кошелёк можно только с секретной фразой (через 48 часов).</span></p>
       <input id="bindaddr" spellcheck="false" autocapitalize="off" placeholder="T..." style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
       <label class="chk"><input type="checkbox" id="bindok"> <span><span class="en">This is my personal wallet (not an exchange address) and I have checked it.</span><span class="ru">Это мой личный кошелёк (не адрес биржи), я его проверил.</span></span></label>
       <p class="note" id="bindmsg" hidden></p>
@@ -168,12 +169,12 @@
       <input type="hidden" id="waddr">
       <button class="linkish" type="button" id="chgopen" style="justify-self:start"><span class="en">Lost access to this wallet? Change it</span><span class="ru">Потеряли доступ к кошельку? Сменить</span></button>
       <div class="stack chgform" id="chgform" hidden>
-        <p class="payhint"><span class="en">Enter the new wallet and your recovery code. The change takes effect in <b>48 hours</b>; cash outs are frozen until then, and you get a message you can cancel it from.</span><span class="ru">Укажите новый кошелёк и код восстановления. Смена вступит в силу через <b>48 часов</b>. До этого выводы заморожены, а вам придёт сообщение, из которого смену можно отменить.</span></p>
+        <p class="payhint"><span class="en">Enter the new wallet and your secret phrase. The change takes effect in <b>48 hours</b>; cash outs are frozen until then, and you get a message you can cancel it from.</span><span class="ru">Укажите новый кошелёк и секретную фразу. Смена вступит в силу через <b>48 часов</b>. До этого выводы заморожены, а вам придёт сообщение, из которого смену можно отменить.</span></p>
         <input id="chgaddr" spellcheck="false" autocapitalize="off" placeholder="T..." style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
-        <input id="chgcode" spellcheck="false" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" style="font-family:ui-monospace,Consolas,monospace;font-size:16px;letter-spacing:.08em">
+        <textarea id="chgcode" class="phrasein" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="word1 word2 … word12"></textarea>
         <p class="note" id="chgmsg" hidden></p>
         <button class="btn" type="button" id="chgbtn"><span class="en">Request the change (48 h)</span><span class="ru">Запросить смену (48 ч)</span></button>
-        <p class="hint"><span class="en">Without the recovery code the wallet cannot be changed. Nobody, not even the club, can do it for you.</span><span class="ru">Без кода восстановления сменить кошелёк невозможно. Никто, даже клуб, не сможет сделать это за вас.</span></p>
+        <p class="hint"><span class="en">Without the secret phrase the wallet cannot be changed. Nobody, not even the club, can do it for you.</span><span class="ru">Без секретной фразы сменить кошелёк невозможно. Никто, даже клуб, не сможет сделать это за вас.</span></p>
       </div>
       <p class="hint" id="wcap" hidden></p>
       <p class="note bad" id="wnoaddr" hidden><span class="en">You have not bound a wallet on this network yet. It is bound with your first deposit on the Buy tab.</span><span class="ru">В этой сети у вас ещё нет привязанного кошелька. Он привязывается перед первым депозитом на вкладке «Купить».</span></p>
@@ -265,9 +266,17 @@
       <button class="btn" type="button" id="s-pinbtn"></button>
       <div class="srow"><span class="muted">Face ID / <span class="en">fingerprint</span><span class="ru">отпечаток</span></span><span id="s-bio">—</span></div>
       <button class="btn" type="button" id="s-biobtn" hidden></button>
-      <div class="srow"><span class="muted"><span class="en">Recovery code</span><span class="ru">Код восстановления</span></span><span id="s-code">—</span></div>
-      <button class="btn" type="button" id="s-codebtn" hidden><span class="en">Create recovery code</span><span class="ru">Создать код восстановления</span></button>
-      <p class="hint"><span class="en">The recovery code is the only way to change a bound wallet (takes effect in 48 hours). It is shown once and never changes. Lost it — the wallet cannot be changed.</span><span class="ru">Код восстановления — единственный способ сменить привязанный кошелёк (через 48 часов). Показывается один раз и не меняется. Потеряли — сменить кошелёк нельзя.</span></p>
+      <div class="srow"><span class="muted"><span class="en">Secret phrase</span><span class="ru">Секретная фраза</span></span><span id="s-code">—</span></div>
+      <button class="btn" type="button" id="s-codebtn" hidden><span class="en">Create secret phrase</span><span class="ru">Создать секретную фразу</span></button>
+      <p class="hint"><span class="en">12 words that restore your account on a new Telegram and are the only way to change a bound wallet. Shown once, never change. Lost them — nobody can help.</span><span class="ru">12 слов, которые восстанавливают аккаунт на новом Telegram и дают сменить привязанный кошелёк. Показываются один раз и не меняются. Потеряли — помочь не сможет никто.</span></p>
+    </div>
+
+    <div class="card" id="s-restore">
+      <div class="label"><span class="en">Restore account</span><span class="ru">Восстановить аккаунт</span></div>
+      <p class="payhint"><span class="en">Lost your old Telegram? Enter your 12-word secret phrase: your ClubGG ID, wallets and history move to this Telegram. Cash outs open 48 hours later.</span><span class="ru">Потеряли старый Telegram? Введите секретную фразу из 12 слов: ID в ClubGG, кошельки и история перейдут на этот Telegram. Выводы откроются через 48 часов.</span></p>
+      <textarea id="s-phrase" class="phrasein" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="word1 word2 … word12"></textarea>
+      <p class="note" id="s-restoremsg" hidden></p>
+      <button class="btn" type="button" id="s-restorebtn"><span class="en">Restore</span><span class="ru">Восстановить</span></button>
     </div>
 
     <div class="card">
@@ -314,15 +323,15 @@
 <div id="codebox" class="overlay" hidden>
   <div class="card codecard">
     <div class="paidmark">🔑</div>
-    <b class="paidtitle"><span class="en">Your recovery code</span><span class="ru">Ваш код восстановления</span></b>
+    <b class="paidtitle"><span class="en">Your secret phrase</span><span class="ru">Ваша секретная фраза</span></b>
     <div class="secret" id="codewrap" role="button" tabindex="0">
       <span class="sk">🔑</span>
       <span class="bigcode" id="codetext">—</span>
       <span class="sh"><span class="en">Tap to show</span><span class="ru">Нажмите, чтобы показать</span></span>
     </div>
     <div class="tbtns two" style="width:100%"><button class="btn primary" type="button" id="codecopy"><span class="en">Copy</span><span class="ru">Копировать</span></button><button class="btn" type="button" id="codeshow"><span class="en">Show</span><span class="ru">Показать</span></button></div>
-    <p class="payhint"><span class="en">Save it somewhere safe (write it down or keep a screenshot). We show it <b>only once</b> and it never changes. It is the only way to change your bound wallet. <b>If you lose it, the wallet cannot be changed by anyone.</b></span><span class="ru">Сохраните его в надёжном месте (запишите или сделайте скриншот). Мы показываем его <b>только один раз</b>, и он никогда не меняется. Это единственный способ сменить привязанный кошелёк. <b>Если потеряете код, сменить кошелёк не сможет никто.</b></span></p>
-    <label class="chk"><input type="checkbox" id="codeok"> <span><span class="en">I have saved the code</span><span class="ru">Я сохранил код</span></span></label>
+    <p class="payhint"><span class="en">Write the 12 words down in order and keep them offline. We show them <b>only once</b> and they never change. They restore your account on a new Telegram and are the only way to change your bound wallet. <b>Never share them: whoever has them owns the account.</b></span><span class="ru">Запишите 12 слов по порядку и храните не в телефоне. Мы показываем их <b>только один раз</b>, и они не меняются. По ним можно восстановить аккаунт на новом Telegram и сменить привязанный кошелёк. <b>Никому их не сообщайте: у кого фраза — того и аккаунт.</b></span></p>
+    <label class="chk"><input type="checkbox" id="codeok"> <span><span class="en">I have written down the 12 words</span><span class="ru">Я записал 12 слов</span></span></label>
     <button class="btn primary" type="button" id="codedone" disabled><span class="en">Done</span><span class="ru">Готово</span></button>
   </div>
 </div>
@@ -335,6 +344,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=33"></script>
+<script src="../assets/app.js?v=34"></script>
 </body>
 </html>

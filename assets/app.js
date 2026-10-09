@@ -219,6 +219,7 @@
     $('s-biobtn').innerHTML = bioOn ? bi('Turn off', 'Выключить') : bi('Turn on', 'Включить');
     $('s-code').innerHTML = hasCode ? '<span class="ok-t">' + t('created', 'создан') + '</span>' : '<span class="no-t">' + t('not created', 'не создан') + '</span>';
     $('s-codebtn').hidden = hasCode;
+    $('s-restore').hidden = !!ggId || Object.keys(wallets).length > 0;
   }
   var settingsLocked = false;
   async function loadLockState() {
@@ -237,6 +238,28 @@
       if (r.error) { m.className = 'note bad'; m.hidden = false; m.innerHTML = /duplicate|unique/i.test(r.error.message) ? bi('This ID is already used by another account. If it is yours, write to support.', 'Этот ID уже привязан к другому аккаунту. Если он ваш — напишите в поддержку.') : /locked/i.test(r.error.message) ? bi('The ID is locked. Change it through support.', 'ID заблокирован для смены. Сменить можно через поддержку.') : bi('Could not save.', 'Не удалось сохранить.'); return; }
       haptic('success'); toast(t('ClubGG ID saved', 'ID в ClubGG сохранён'));
       await loadProfile(); paintSettings();
+    });
+  });
+  $('open-restore').addEventListener('click', function () { showTab('settings'); setTimeout(function () { $('s-restore').scrollIntoView({ behavior: 'smooth' }); $('s-phrase').focus(); }, 100); });
+  $('s-restorebtn').addEventListener('click', function () {
+    var m = $('s-restoremsg'); m.hidden = true;
+    var p = $('s-phrase').value.toLowerCase().replace(/[^a-z\s]/g, ' ').trim().split(/\s+/).join(' ');
+    var bad = function (en, ru) { m.className = 'note bad'; m.innerHTML = bi(en, ru); m.hidden = false; haptic('error'); };
+    if (p.split(' ').length !== 12) return bad('Enter all 12 words.', 'Введите все 12 слов.');
+    ask('Move the account with this phrase to this Telegram? Cash outs open in 48 hours.', 'Перенести аккаунт с этой фразой на этот Telegram? Выводы откроются через 48 часов.', async function () {
+      $('s-restorebtn').disabled = true;
+      var r = await walletCall({ action: 'restore', phrase: p });
+      $('s-restorebtn').disabled = false;
+      if (r.ok) {
+        $('s-phrase').value = ''; haptic('success'); toast(t('Account restored. Set a new PIN.', 'Аккаунт восстановлен. Поставьте новый PIN-код.'));
+        takeState(r.data); await loadProfile(); await loadLockState(); wdAddrs = {}; paintSettings(); return;
+      }
+      var e = r.data.error;
+      if (e === 'bad phrase') bad('This is not a valid secret phrase. Check the words and their order.', 'Это не похоже на секретную фразу. Проверьте слова и их порядок.');
+      else if (e === 'not found') bad('No account has this phrase.', 'Аккаунт с такой фразой не найден.');
+      else if (e === 'already yours') bad('This phrase already belongs to this account.', 'Эта фраза уже от этого аккаунта.');
+      else if (e === 'account not empty') bad('This Telegram already has its own ID or wallets. Restore from a fresh Telegram account.', 'На этом Telegram уже есть свой ID или кошельки. Восстанавливайте на чистом аккаунте.');
+      else bad('Could not restore.', 'Не удалось восстановить.');
     });
   });
   $('s-pinbtn').addEventListener('click', function () { openLock(hasPin ? 'old' : 'set'); });
@@ -358,7 +381,10 @@
     $('nocode').hidden = hasCode || !Object.keys(wallets).length;
   }
   function showCode(code) {
-    $('codetext').textContent = code; $('codewrap').classList.remove('open'); $('codeshow').innerHTML = bi('Show', 'Показать');
+    window.__phrase = code;
+    $('codetext').className = 'bigcode words';
+    $('codetext').innerHTML = code.split(' ').map(function (w, i) { return '<span><i>' + (i + 1) + '</i>' + w + '</span>'; }).join('');
+    $('codewrap').classList.remove('open'); $('codeshow').innerHTML = bi('Show', 'Показать');
     $('codeok').checked = false; $('codedone').disabled = true; $('codebox').hidden = false;
     try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {}
   }
@@ -370,11 +396,11 @@
   $('codewrap').addEventListener('click', toggleCode);
   $('codeshow').addEventListener('click', toggleCode);
   $('codecopy').addEventListener('click', function () {
-    var c = $('codetext').textContent; if (!c || c === '—') return;
-    if (navigator.clipboard) navigator.clipboard.writeText(c).then(function () { haptic('success'); toast(t('Recovery code copied. Keep it somewhere safe.', 'Код восстановления скопирован. Сохраните его в надёжном месте.')); });
+    var c = window.__phrase; if (!c) return;
+    if (navigator.clipboard) navigator.clipboard.writeText(c).then(function () { haptic('success'); toast(t('Phrase copied. Write it down and clear the clipboard.', 'Фраза скопирована. Запишите её и очистите буфер обмена.')); });
   });
   $('codeok').addEventListener('change', function () { $('codedone').disabled = !$('codeok').checked; });
-  $('codedone').addEventListener('click', function () { $('codebox').hidden = true; $('codetext').textContent = '—'; $('codewrap').classList.remove('open'); });
+  $('codedone').addEventListener('click', function () { $('codebox').hidden = true; $('codetext').textContent = '—'; window.__phrase = ''; $('codewrap').classList.remove('open'); });
   $('pendcancel').addEventListener('click', function () {
     ask('Cancel the wallet change?', 'Отменить смену кошелька?', async function () {
       var r = await walletCall({ action: 'cancel' }); if (r.ok) { haptic('success'); takeState(r.data); }
@@ -390,15 +416,15 @@
     var code = $('chgcode').value.trim();
     var bad = function (en, ru) { m.className = 'note bad'; m.innerHTML = bi(en, ru); m.hidden = false; haptic('error'); };
     if (!ADDR_RE[net].test(a)) return bad(ADDR_HINT[net][0], ADDR_HINT[net][1]);
-    if (code.replace(/[^0-9A-Za-z]/g, '').length !== 12) return bad('Enter the 12-character recovery code.', 'Введите код восстановления из 12 символов.');
+    if (code.toLowerCase().replace(/[^a-z\s]/g, ' ').trim().split(/\s+/).length !== 12) return bad('Enter all 12 words of your secret phrase.', 'Введите все 12 слов секретной фразы.');
     ask('Change the wallet to ' + a + '? It takes effect in 48 hours.', 'Сменить кошелёк на ' + a + '? Смена вступит в силу через 48 часов.', async function () {
       $('chgbtn').disabled = true;
       var r = await walletCall({ action: 'change', chain: CHAIN_OF[net], address: a, code: code });
       $('chgbtn').disabled = false;
       if (r.ok) { haptic('success'); $('chgaddr').value = ''; $('chgcode').value = ''; $('chgform').hidden = true; takeState(r.data); return; }
       var e = r.data.error;
-      if (e === 'wrong code') bad('Wrong code. Attempts left today: ' + r.data.left + '.', 'Неверный код. Осталось попыток на сегодня: ' + r.data.left + '.');
-      else if (e === 'too many attempts') bad('Too many wrong codes. Try again tomorrow.', 'Слишком много неверных кодов. Попробуйте завтра.');
+      if (e === 'wrong code') bad('Wrong phrase. Attempts left today: ' + r.data.left + '.', 'Неверная фраза. Осталось попыток на сегодня: ' + r.data.left + '.');
+      else if (e === 'too many attempts') bad('Too many wrong phrases. Try again tomorrow.', 'Слишком много неверных попыток. Попробуйте завтра.');
       else if (e === 'wallet taken') bad('This wallet is bound to another player.', 'Этот кошелёк привязан к другому игроку.');
       else if (e === 'change pending') bad('A change is already waiting.', 'Смена уже запрошена и ждёт.');
       else if (e === 'same address') bad('This is already your wallet.', 'Это и так ваш кошелёк.');
@@ -518,6 +544,7 @@
       else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
       else if (rd.error === 'wrong pin') { sessionPin = ''; wmsg('Wrong PIN. Try again.', 'Неверный PIN-код. Попробуйте ещё раз.', true); }
       else if (rd.error === 'pin locked') wmsg('Too many wrong PINs. Try again in 15 minutes.', 'Слишком много неверных PIN. Попробуйте через 15 минут.', true);
+      else if (rd.error === 'restored recently') wmsg('The account was just restored: cash outs open on ' + new Date(rd.until).toLocaleString() + '.', 'Аккаунт недавно восстановлен: выводы откроются ' + new Date(rd.until).toLocaleString('ru-RU') + '.', true);
       else if (rd.error === 'wallet change pending') wmsg('A wallet change is waiting: cash outs are frozen until ' + new Date(rd.until).toLocaleString() + '.', 'Идёт смена кошелька: выводы заморожены до ' + new Date(rd.until).toLocaleString('ru-RU') + '.', true);
       else if (rd.error === 'address not allowed' || rd.error === 'no bound wallet') wmsg('Cash outs go only to your bound wallet on this network.', 'Вывод возможен только на ваш привязанный кошелёк в этой сети.', true);
       else if (rd.error === 'same way') {

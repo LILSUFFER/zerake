@@ -4,8 +4,12 @@
 //   change  -> recovery code + new address: the change takes effect after 48 hours (cash outs frozen meanwhile).
 //              The recovery code itself never changes. Without it a wallet cannot be changed by anyone.
 //   cancel  -> cancel a pending change (no code needed: it only makes things safer)
+//   restore -> a NEW Telegram account + the secret phrase takes over the old account (ID, wallets, history);
+//              cash outs are frozen for 48 hours after it
+// The secret phrase is 12 BIP39 words (128-bit), shown once, never changes; only its hash is stored.
 //   pin_set -> set / change the 6-digit app PIN;  pin_check -> unlock (5 wrong PINs lock it for 15 minutes)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Mnemonic } from "https://esm.sh/ethers@6.13.4";
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
 const CHAINS: Record<string, RegExp> = {
@@ -17,21 +21,24 @@ const CHANGE_HOURS = 48;
 const MAX_FAILED = 5;           // wrong codes per 24 hours
 
 // ---- helpers ----
-const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+/** 12-word secret phrase (BIP39, 128 bits of randomness). */
 function newCode(): string {
-  const r = crypto.getRandomValues(new Uint8Array(12));
-  const s = Array.from(r, (b) => CROCKFORD[b % 32]).join("");
-  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+  return Mnemonic.fromEntropy(crypto.getRandomValues(new Uint8Array(16))).phrase;
 }
 function normCode(c: unknown): string {
-  return String(c ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  return String(c ?? "").toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/).join(" ");
+}
+function validPhrase(c: unknown): boolean {
+  const p = normCode(c);
+  return p.split(" ").length === 12 && Mnemonic.isValidMnemonic(p);
+}
+/** The hash does not contain the user id: a phrase must find its account when restoring. */
+async function hashCode(_userId: string, code: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-seed:" + normCode(code)));
+  return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 async function hashPin(userId: string, pin: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-pin:" + userId + ":" + String(pin)));
-  return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-async function hashCode(userId: string, code: string): Promise<string> {
-  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-recovery:" + userId + ":" + normCode(code)));
   return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 /** TON: one form for the same wallet (non-bounceable UQ…). */
@@ -127,7 +134,7 @@ Deno.serve(async (req: Request) => {
     if (!sec?.code_hash) return out({ error: "no code" }, 400, h);
     const recent = sec.failed_at && Date.now() - new Date(sec.failed_at).getTime() < 24 * 3600 * 1000;
     if (recent && sec.failed >= MAX_FAILED) return out({ error: "too many attempts" }, 429, h);
-    if ((await hashCode(uid, String(body.code ?? ""))) !== sec.code_hash) {
+    if (!validPhrase(body.code) || (await hashCode(uid, String(body.code ?? ""))) !== sec.code_hash) {
       await admin.from("player_security").update({ failed: (recent ? sec.failed : 0) + 1, failed_at: new Date().toISOString() }).eq("user_id", uid);
       return out({ error: "wrong code", left: MAX_FAILED - ((recent ? sec.failed : 0) + 1) }, 403, h);
     }
@@ -170,6 +177,23 @@ Deno.serve(async (req: Request) => {
     if (sec?.pin_hash && !(await check(String(body.old_pin ?? "")))) return out({ error: "wrong pin" }, 403, h);
     await admin.from("player_security").upsert({ user_id: uid, pin_hash: await hashPin(uid, pin), pin_failed: 0, updated_at: new Date().toISOString() });
     return out({ ...(await state()), ok: true }, 200, h);
+  }
+
+  if (action === "restore") {
+    if (!validPhrase(body.phrase)) return out({ error: "bad phrase" }, 400, h);
+    const owner = (await admin.from("player_security").select("user_id").eq("code_hash", await hashCode("", String(body.phrase))).maybeSingle()).data;
+    if (!owner) return out({ error: "not found" }, 404, h);
+    if (owner.user_id === uid) return out({ error: "already yours" }, 400, h);
+    const oldTid = (await admin.auth.admin.getUserById(owner.user_id)).data?.user?.user_metadata?.telegram_id;
+    const t = await admin.rpc("transfer_account", { p_old: owner.user_id, p_new: uid });
+    if (t.error) return out({ error: /not empty/.test(t.error.message) ? "account not empty" : "failed" }, 409, h);
+    const gg = (await admin.from("profiles").select("gg_id").eq("user_id", uid).maybeSingle()).data?.gg_id ?? "";
+    const bot = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (bot && oldTid) await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: Number(oldTid), parse_mode: "HTML", text: "⚠️ <b>Ваш аккаунт Zerake перенесён на другой Telegram</b> с помощью секретной фразы.\n\nЕсли это были не вы — срочно напишите в поддержку." }) }).catch(() => {});
+    await tellAll(admin, uid, "✅ <b>Аккаунт восстановлен</b> · <i>Account restored</i>\n\nID в ClubGG, кошельки и история перенесены. Выводы станут доступны через 48 часов. Поставьте новый PIN-код в настройках.",
+      `🔁 Account restored with the secret phrase to a new Telegram (ClubGG ID ${gg}). Cash outs frozen for 48 h.`);
+    return out(await state(), 200, h);
   }
 
   if (action === "cancel") {

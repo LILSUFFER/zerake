@@ -113,7 +113,9 @@ Deno.serve(async (req: Request) => {
   if (!profile?.gg_id) return out({ error: "no clubgg id" }, 400, h);
 
   // PIN: if the player set one, every cash out needs it
-  const sec = (await admin.from("player_security").select("pin_hash,pin_failed,pin_locked_until").eq("user_id", u.user.id).maybeSingle()).data;
+  const sec = (await admin.from("player_security").select("pin_hash,pin_failed,pin_locked_until,restored_at").eq("user_id", u.user.id).maybeSingle()).data;
+  if (sec?.restored_at && Date.now() - new Date(sec.restored_at).getTime() < 48 * 3600 * 1000)
+    return out({ error: "restored recently", until: new Date(new Date(sec.restored_at).getTime() + 48 * 3600 * 1000).toISOString() }, 423, h);
   if (sec?.pin_hash) {
     if (sec.pin_locked_until && new Date(sec.pin_locked_until).getTime() > Date.now()) return out({ error: "pin locked" }, 429, h);
     const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-pin:" + u.user.id + ":" + String(body.pin ?? "")));

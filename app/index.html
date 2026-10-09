@@ -21,8 +21,8 @@
   </header>
 
   <nav class="tabs" role="tablist" id="tabs">
-    <button role="tab" data-tab="deposit" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg><span class="en">Deposit</span><span class="ru">Депозит</span></button>
-    <button role="tab" data-tab="withdraw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span class="en">Cash out</span><span class="ru">Вывод</span></button>
+    <button role="tab" data-tab="deposit" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg><span class="en">Buy chips</span><span class="ru">Купить</span></button>
+    <button role="tab" data-tab="withdraw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span class="en">Sell chips</span><span class="ru">Продать</span></button>
     <button role="tab" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="en">History</span><span class="ru">История</span></button>
     <button role="tab" data-tab="admin" id="tab-admin-btn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span class="en">Queue</span><span class="ru">Заявки</span><i class="badge" id="adm-badge" hidden>0</i></button>
   </nav>
@@ -48,7 +48,7 @@
     <div id="trc-flow" class="stack">
       <form class="card" id="reqform" autocomplete="off">
         <div class="row">
-          <h2 class="ctitle"><span class="en">Get chips</span><span class="ru">Пополнить фишки</span></h2>
+          <h2 class="ctitle"><span class="en">Buy chips</span><span class="ru">Купить фишки</span></h2>
           <span class="pill" id="req-net">USDT · TRC20</span>
         </div>
         <label for="reqamt"><span class="en">Amount</span><span class="ru">Сумма</span></label>
@@ -121,7 +121,7 @@
   <section id="tab-withdraw" class="pane" hidden>
     <form class="card" id="wform" autocomplete="off">
       <div class="row">
-        <h2 class="ctitle"><span class="en">Cash out</span><span class="ru">Вывести фишки</span></h2>
+        <h2 class="ctitle"><span class="en">Sell chips</span><span class="ru">Продать фишки</span></h2>
         <span class="pill">USDT · <b class="netname" style="font-weight:500">TRC20</b></span>
       </div>
       <label for="wamt"><span class="en">Chips to cash out</span><span class="ru">Сколько фишек вывести</span></label>
@@ -209,6 +209,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=18"></script>
+<script src="../assets/app.js?v=19"></script>
 </body>
 </html>

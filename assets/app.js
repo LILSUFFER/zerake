@@ -280,21 +280,35 @@
     }
     paint(); tick = setInterval(paint, 1000); poll = setInterval(checkPaid, 8000);
   }
+  var reqCache = {}, recentPaid = {};
+  async function fetchOpen(n) {
+    var r = await callReq({ check: true, network: n });
+    var rq = (r.ok && r.data.request) || null;
+    reqCache[n] = rq;
+    if (!rq && !(n in recentPaid)) {
+      // the player's last request was paid recently: keep showing how far it has got
+      var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).eq('network', n).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      recentPaid[n] = lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 24 * 3600 * 1000 ? lr.data : null;
+    }
+    return rq;
+  }
+  function renderOpen(n) {
+    if (n !== net) return;
+    var rq = reqCache[n];
+    if (rq) { if (!curReq || curReq.request_no !== rq.request_no || $('req-view').hidden) showRequest(rq); return; }
+    if (curReq && recentPaid[n] && curReq.request_no === recentPaid[n].request_no) return;
+    stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form');
+    if (recentPaid[n]) { curReq = recentPaid[n]; poll = setInterval(checkPaid, 8000); refreshPaid(); }
+  }
   async function loadOpenRequest() {
     $('reqmsg').hidden = true;
-    var asked = net;
-    var r = await callReq({ check: true });
-    if (asked !== net) return; // the player switched networks meanwhile
-    if (r.ok && r.data.request) showRequest(r.data.request);
-    else {
-      stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form');
-      // the player's last request was paid recently: keep showing how far it has got
-      var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).eq('network', net).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 24 * 3600 * 1000) {
-        curReq = lr.data; poll = setInterval(checkPaid, 8000); refreshPaid();
-      }
-    }
+    var n = net;
+    if (n in reqCache) renderOpen(n);             // instant, from what we already know
+    else { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form'); }
+    try { await fetchOpen(n); } catch (e) { return; }
+    renderOpen(n);
   }
+  function prefetchNets() { ['TRC20', 'BEP20', 'TON'].forEach(function (n) { if (n !== net) fetchOpen(n).catch(function () {}); }); }
   document.querySelectorAll('[data-quick]').forEach(function (b) {
     b.addEventListener('click', function () { $('reqamt').value = b.dataset.quick; try { tg.HapticFeedback.selectionChanged(); } catch (e) {} });
   });
@@ -304,7 +318,7 @@
     $('reqmsg').hidden = true; $('reqbtn').disabled = true;
     var r = await callReq({ amount: $('reqamt').value, fresh: true });
     $('reqbtn').disabled = false;
-    if (r.ok && r.data.request) { showRequest(r.data.request); return; }
+    if (r.ok && r.data.request) { reqCache[net] = r.data.request; showRequest(r.data.request); return; }
     var er = r.data && r.data.error;
     if (er === 'network disabled') reqErr('This network is not available yet.', 'Эта сеть пока недоступна.');
     else if (er === 'below minimum') reqErr('Minimum deposit is ' + r.data.min + ' USDT.', 'Минимальный депозит: ' + r.data.min + ' USDT.');
@@ -312,7 +326,7 @@
     else if (er === 'bad amount') reqErr('Enter a valid amount, for example 50.', 'Введите корректную сумму, например 50.');
     else reqErr('Could not create the request. Please try again.', 'Не удалось создать заявку. Попробуйте ещё раз.');
   });
-  $('rv-new').addEventListener('click', function () { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form'); });
+  $('rv-new').addEventListener('click', function () { reqCache[net] = null; recentPaid[net] = null; stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form'); });
   document.querySelectorAll('[data-copy-from]').forEach(function (b) {
     b.addEventListener('click', function () {
       var txt = $(b.dataset.copyFrom).textContent; if (!txt || txt === '—') return;
@@ -615,6 +629,9 @@
     return Promise.all([loadProfile(), loadAddress()]);
   }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;
+    var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];
+    if (go) showTab(go === 'buy' ? 'deposit' : go === 'sell' ? 'withdraw' : 'history');
+    prefetchNets();
     checkStaff();
   }).catch(function () {
     splashError('Could not sign you in. Please reopen the app.', 'Не удалось войти. Откройте приложение заново.');

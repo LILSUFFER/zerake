@@ -124,10 +124,11 @@ input:focus { outline: none; border-color: var(--green); }
 .paidtitle { font-size: 22px; font-weight: 500; }
 .paidsub { margin: 0; color: var(--soft); font-size: 14px; }
 .paidsub b { color: var(--fg); font-weight: 500; }
-.prog { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; text-align: left; }
-.prog li { position: relative; padding: 11px 14px 11px 40px; border: 1px solid var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; background: var(--card-2); }
-.prog li::before { content: ""; position: absolute; left: 14px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; border: 2px solid var(--line); box-sizing: border-box; }
-.prog li.done { color: var(--fg); border-color: rgba(15,185,131,.4); }
-.prog li.done::before { background: var(--green); border-color: var(--green); }
-.prog li.active { color: var(--fg); }
-.prog li.active::before { border-color: var(--green); border-top-color: transparent; animation: s .9s linear infinite; }
+
+.payhint { margin: 0; color: var(--soft); font-size: 13px; }
+/* three calm states of the deposit screen: form, paying, paid */
+#tab-deposit.st-open .steps, #tab-deposit.st-open .hint:not(.warnx),
+#tab-deposit.st-paid .steps, #tab-deposit.st-paid .hint { display: none !important; }
+body.paid-view #nets { display: none; }
+#tab-deposit.st-paid #rv-new { background: none; border: 0; color: var(--soft); font-size: 14px; text-decoration: underline; padding: 8px; }
+#tab-deposit.st-paid .paidbox { padding: 28px 20px; }

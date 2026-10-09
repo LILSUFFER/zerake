@@ -223,14 +223,25 @@
     else if (kind === 'expired') { m.className = 'note bad'; m.innerHTML = bi('The request has expired. If you already paid, we will still find the payment. Otherwise create a new request.', 'Срок заявки истёк. Если вы уже заплатили, мы всё равно найдём платёж. Иначе создайте новую заявку.'); }
     else { m.className = 'note'; m.innerHTML = bi('Waiting for your payment…', 'Ждём ваш платёж…'); }
   }
+  function setState(st) {
+    var tab = $('tab-deposit');
+    tab.classList.remove('st-form', 'st-open', 'st-paid');
+    tab.classList.add('st-' + st);
+    document.body.classList.toggle('paid-view', st === 'paid');
+  }
   function showPaid(st) {
     var first = !curReq.paid;
     curReq.paid = true; curReq.sent = st === 'chips_sent';
     $('req-view').hidden = false; $('reqform').hidden = true;
     $('req-view').classList.add('paid');
-    $('rv-paid-sub').innerHTML = '<b>' + curReq.amount + ' USDT</b> · ' + bi('chips go to ClubGG ID ', 'фишки придут на ID в ClubGG ') + '<b>' + (ggId || '—') + '</b>';
-    $('rv-p2').className = curReq.sent ? 'done' : 'active';
-    $('rv-p3').className = curReq.sent ? 'done' : '';
+    setState('paid');
+    if (curReq.sent) {
+      $('rv-paid-title').innerHTML = bi('Chips sent', 'Фишки отправлены');
+      $('rv-paid-sub').innerHTML = bi('Good luck at the tables!', 'Удачной игры!');
+    } else {
+      $('rv-paid-title').innerHTML = bi('Payment received', 'Платёж получен');
+      $('rv-paid-sub').innerHTML = bi('Please wait. A manager is sending the chips to your ClubGG ID ', 'Ожидайте. Менеджер отправляет фишки на ваш ID в ClubGG ') + '<b>' + (ggId || '—') + '</b>';
+    }
     if (first) haptic('success');
     if (curReq.sent) stopReqTimers();
   }
@@ -245,6 +256,7 @@
   function showRequest(r) {
     stopReqTimers(); curReq = r;
     $('req-view').classList.remove('paid');
+    setState('open');
     $('reqform').hidden = true; $('req-view').hidden = false;
     $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.amount;
     renderQr(r.address); setReqStatus('wait');
@@ -261,7 +273,7 @@
     var r = await callReq({ check: true });
     if (r.ok && r.data.request) showRequest(r.data.request);
     else {
-      stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false;
+      stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form');
       // the player's last request was paid recently: keep showing how far it has got
       var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 24 * 3600 * 1000) {
@@ -282,7 +294,7 @@
     else if (er === 'bad amount') reqErr('Enter a valid amount, for example 50.', 'Введите корректную сумму, например 50.');
     else reqErr('Could not create the request. Please try again.', 'Не удалось создать заявку. Попробуйте ещё раз.');
   });
-  $('rv-new').addEventListener('click', function () { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; });
+  $('rv-new').addEventListener('click', function () { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form'); });
   document.querySelectorAll('[data-copy-from]').forEach(function (b) {
     b.addEventListener('click', function () {
       var txt = $(b.dataset.copyFrom).textContent; if (!txt || txt === '—') return;

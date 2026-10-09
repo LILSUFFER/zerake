@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css">
+<link rel="stylesheet" href="../assets/app.css?v=4">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -43,7 +43,7 @@
   </section>
 
   <!-- Deposit -->
-  <section id="tab-deposit" class="pane">
+  <section id="tab-deposit" class="pane st-form">
 
     <!-- TRC20: a deposit request (exact amount, 30 minutes) -->
     <div id="trc-flow" class="stack">
@@ -59,15 +59,11 @@
       <div id="req-view" class="stack" hidden>
         <div class="card paidbox" id="rv-paidbox">
           <div class="paidmark">&#10003;</div>
-          <b class="paidtitle"><span class="en">Payment received</span><span class="ru">Платёж получен</span></b>
+          <b class="paidtitle" id="rv-paid-title"></b>
           <p class="paidsub" id="rv-paid-sub"></p>
-          <ol class="prog">
-            <li class="done"><span class="en">Payment received</span><span class="ru">Платёж получен</span></li>
-            <li id="rv-p2"><span class="en">A manager is sending your chips</span><span class="ru">Менеджер отправляет фишки</span></li>
-            <li id="rv-p3"><span class="en">Chips sent. Good luck!</span><span class="ru">Фишки отправлены. Удачной игры!</span></li>
-          </ol>
         </div>
         <div class="card" id="rv-details">
+          <p class="payhint"><span class="en">Send exactly this amount on the TRC20 network. Do not round it.</span><span class="ru">Отправьте ровно эту сумму в сети TRC20. Не округляйте её.</span></p>
           <div class="row"><span class="muted"><span class="en">Request number</span><span class="ru">Номер заявки</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
           <div class="mono" id="rv-no">—</div>
           <div class="row"><span class="muted"><span class="en">Token</span><span class="ru">Токен</span></span><b>Tether USDT</b></div>
@@ -187,7 +183,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="../assets/config.js"></script>
-<script src="../assets/app.js"></script>
+<script src="../assets/config.js?v=4"></script>
+<script src="../assets/app.js?v=4"></script>
 </body>
 </html>

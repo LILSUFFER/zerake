@@ -1,0 +1,139 @@
+// Supabase Edge Function: creates a TRC20 deposit request for the signed-in player.
+// The player gets: a request number, a pool address, and an EXACT amount (their amount plus a
+// small unique tail). The tail identifies the payment, so one address can serve many players.
+// An address receives until it holds the "full" amount, then the next pool address takes over.
+//
+// Settings (Secrets): XPUB_TRON (public key). The service never holds a key that can move money.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { HDNodeWallet } from "https://esm.sh/ethers@6.13.4";
+
+const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
+const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+// ---- helpers (pure functions, unit-tested) ----
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+/** 26-character request number: time part + random part, like "01M4GX8D4FP0B0TX2FPKA7X30Q". */
+function makeRequestNo(nowMs: number, rnd: Uint8Array): string {
+  let t = "", n = BigInt(nowMs);
+  for (let i = 0; i < 10; i++) { t = CROCKFORD[Number(n % 32n)] + t; n /= 32n; }
+  let r = "";
+  for (let i = 0; i < 16; i++) r += CROCKFORD[rnd[i] % 32];
+  return t + r;
+}
+/** Unique tail between 0.000101 and 0.099999 USDT (never more than ten cents on top). */
+function makeTail(rnd: number): string {
+  const n = 101 + (rnd % 99899);
+  return (n / 1_000_000).toFixed(6);
+}
+/** base + tail as an exact 6-place decimal string (no floating-point drift). */
+function addTail(base: string, tail: string): string {
+  const [bi, bf = ""] = base.split(".");
+  const cents = BigInt(bi) * 1_000_000n + BigInt(bf.padEnd(6, "0").slice(0, 6));
+  const t = BigInt(tail.replace(".", "").replace(/^0+(?=\d)/, ""));
+  const v = cents + t;
+  return `${v / 1_000_000n}.${(v % 1_000_000n).toString().padStart(6, "0")}`;
+}
+/** Player input like "50", "50.5", "50,25" -> normalised string with at most 2 decimals, or null. */
+function parseBase(input: unknown): string | null {
+  const s = String(input ?? "").trim().replace(",", ".");
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(s)) return null;
+  const [i, f = ""] = s.split(".");
+  return `${BigInt(i)}.${f.padEnd(2, "0")}0000`;
+}
+// ---- end helpers ----
+
+function cors(o: string | null): Record<string, string> {
+  const a = o && ALLOWED.includes(o) ? o : ALLOWED[0];
+  return {
+    "Access-Control-Allow-Origin": a,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+    "Content-Type": "application/json",
+  };
+}
+const out = (b: unknown, s: number, h: Record<string, string>) => new Response(JSON.stringify(b), { status: s, headers: h });
+
+function base58(bytes: Uint8Array): string {
+  let n = 0n;
+  for (const b of bytes) n = (n << 8n) | BigInt(b);
+  let s = "";
+  while (n > 0n) { s = ALPHABET[Number(n % 58n)] + s; n /= 58n; }
+  for (const b of bytes) { if (b === 0) s = "1" + s; else break; }
+  return s;
+}
+async function sha256(b: Uint8Array): Promise<Uint8Array> { return new Uint8Array(await crypto.subtle.digest("SHA-256", b)); }
+async function tronAddress(xpub: string, index: number): Promise<string> {
+  // deno-lint-ignore no-explicit-any
+  const node: any = HDNodeWallet.fromExtendedKey(xpub).deriveChild(0).deriveChild(index);
+  const body = new Uint8Array(21);
+  body[0] = 0x41;
+  for (let i = 0; i < 20; i++) body[i + 1] = parseInt(node.address.slice(2 + i * 2, 4 + i * 2), 16);
+  const check = (await sha256(await sha256(body))).subarray(0, 4);
+  const full = new Uint8Array(25); full.set(body); full.set(check, 21);
+  return base58(full);
+}
+
+Deno.serve(async (req: Request) => {
+  const h = cors(req.headers.get("origin"));
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
+  if (req.method !== "POST") return out({ error: "method" }, 405, h);
+
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return out({ error: "no session" }, 401, h);
+  const asUser = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false } });
+  const { data: u, error: ue } = await asUser.auth.getUser(token);
+  if (ue || !u?.user) return out({ error: "no session" }, 401, h);
+
+  let body: Record<string, unknown> = {};
+  try { body = await req.json(); } catch { return out({ error: "bad json" }, 400, h); }
+
+  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const cfg = (await admin.from("chain_config").select("min_deposit,max_deposit,request_ttl_min").eq("network", "TRC20").maybeSingle()).data;
+  if (!cfg) return out({ error: "not configured" }, 500, h);
+
+  // The player's own newest live request is returned instead of making a new one every time.
+  const live = await admin.from("deposit_requests").select("request_no,address,amount,base_amount,expires_at,status")
+    .eq("user_id", u.user.id).eq("network", "TRC20").eq("status", "open").gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (body.check === true) return out({ request: live.data ?? null }, 200, h);       // read-only: "do I have one?"
+  if (live.data && body.fresh !== true) return out({ request: live.data, existing: true }, 200, h);
+  if (live.data) await admin.from("deposit_requests").update({ status: "expired", expires_at: new Date().toISOString() }).eq("request_no", live.data.request_no);
+
+  const base = parseBase(body.amount);
+  if (!base) return out({ error: "bad amount" }, 400, h);
+  if (Number(base) < Number(cfg.min_deposit)) return out({ error: "below minimum", min: cfg.min_deposit }, 400, h);
+  if (Number(base) > Number(cfg.max_deposit)) return out({ error: "above maximum", max: cfg.max_deposit }, 400, h);
+
+  // Which pool address receives now? The first one that is not full; make a new one if none.
+  let pool = (await admin.from("trc_pool").select("address").eq("status", "receiving").order("derivation_index").limit(1).maybeSingle()).data;
+  if (!pool) {
+    const rawKey = Deno.env.get("XPUB_TRON") ?? "";
+    const xpub = rawKey.match(/xpub[1-9A-HJ-NP-Za-km-z]{100,}/)?.[0];
+    if (!xpub) return out({ error: "not configured" }, 500, h);
+    const idx = await admin.rpc("next_pool_index");
+    if (idx.error || idx.data == null) { console.error("pool index:", idx.error?.message); return out({ error: "pool failed" }, 500, h); }
+    let address: string;
+    try { address = await tronAddress(xpub, Number(idx.data)); } catch (e) { console.error("derive:", String(e)); return out({ error: "derive failed" }, 500, h); }
+    const ins = await admin.from("trc_pool").insert({ derivation_index: Number(idx.data), address });
+    if (ins.error) console.error("pool insert:", ins.error.message);
+    pool = (await admin.from("trc_pool").select("address").eq("status", "receiving").order("derivation_index").limit(1).maybeSingle()).data;
+    if (!pool) return out({ error: "pool failed" }, 500, h);
+  }
+
+  // Add the unique tail; if that exact amount is taken on this address, try another tail.
+  const expires = new Date(Date.now() + Number(cfg.request_ttl_min) * 60_000).toISOString();
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const rnd = crypto.getRandomValues(new Uint32Array(1))[0];
+    const amount = addTail(base, makeTail(rnd));
+    const requestNo = makeRequestNo(Date.now(), crypto.getRandomValues(new Uint8Array(16)));
+    const ins = await admin.from("deposit_requests").insert({
+      request_no: requestNo, user_id: u.user.id, network: "TRC20", address: pool.address,
+      base_amount: base, amount, expires_at: expires,
+    }).select("request_no,address,amount,base_amount,expires_at,status").single();
+    if (!ins.error) return out({ request: ins.data }, 200, h);
+    if (ins.error.code !== "23505") { console.error("request insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
+  }
+  return out({ error: "busy, try again" }, 503, h);
+});

@@ -91,11 +91,12 @@
   async function loadProfile() {
     var r = await sb.from('profiles').select('gg_id').eq('user_id', me.id).maybeSingle();
     ggId = (r.data && r.data.gg_id) || '';
-    $('dep-id').textContent = $('wd-id').textContent = ggId || '—';
+    $('dep-id').textContent = $('dep-id2').textContent = $('wd-id').textContent = ggId || '—';
     $('noid').hidden = !!ggId;
     $('wsubmit').disabled = !ggId;
   }
   async function loadAddress() {
+    if (net === 'TRC20') return loadOpenRequest();
     var n = net;
     var a = addrCache[n];
     if (!a) {
@@ -119,6 +120,8 @@
 
   function applyNet() {
     document.body.dataset.net = net;
+    $('trc-flow').hidden = net !== 'TRC20';
+    $('bep-flow').hidden = net !== 'BEP20';
     document.querySelectorAll('#nets button').forEach(function (b) { b.classList.toggle('on', b.dataset.net === net); });
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = net; });
     $('dep-net').textContent = 'USDT · ' + net;
@@ -192,6 +195,77 @@
     haptic('success');
     wmsg('Request sent. We will pay out after the chips are received.', 'Запрос отправлен. Выплатим после получения фишек.', false);
     $('wamt').value = ''; $('waddr').value = '';
+  });
+
+  /* ---------- TRC20 deposit request ---------- */
+  var curReq = null, tick = null, poll = null;
+  function reqErr(en, ru) { var m = $('reqmsg'); m.innerHTML = bi(en, ru); m.className = 'note bad'; m.hidden = false; }
+  async function callReq(body) {
+    var ses = (await sb.auth.getSession()).data.session;
+    var r = await fetch(C.supabaseUrl + '/functions/v1/create-deposit-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
+      body: JSON.stringify(body)
+    });
+    var d = {}; try { d = await r.json(); } catch (e) {}
+    return { ok: r.ok, data: d };
+  }
+  function fmt(ms) { if (ms < 0) ms = 0; var s = Math.floor(ms / 1000); return ('0' + Math.floor(s / 60)).slice(-2) + ':' + ('0' + (s % 60)).slice(-2); }
+  function stopReqTimers() { clearInterval(tick); clearInterval(poll); tick = poll = null; }
+  function renderQr(text) {
+    var box = $('rv-qr'); box.innerHTML = '';
+    try { var q = window.qrcode(0, 'M'); q.addData(text); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (e) {}
+  }
+  function setReqStatus(kind) {
+    var m = $('rv-status');
+    if (kind === 'paid') { m.className = 'note'; m.innerHTML = bi('Payment received. Chips will be sent to your ClubGG ID.', 'Платёж получен. Фишки будут отправлены на ваш ID в ClubGG.'); }
+    else if (kind === 'expired') { m.className = 'note bad'; m.innerHTML = bi('The request has expired. If you already paid, we will still find the payment. Otherwise create a new request.', 'Срок заявки истёк. Если вы уже заплатили, мы всё равно найдём платёж. Иначе создайте новую заявку.'); }
+    else { m.className = 'note'; m.innerHTML = bi('Waiting for your payment…', 'Ждём ваш платёж…'); }
+  }
+  async function checkPaid() {
+    if (!curReq) return;
+    var r = await sb.from('deposit_requests').select('status').eq('request_no', curReq.request_no).maybeSingle();
+    if (r.data && r.data.status === 'paid') { curReq.paid = true; stopReqTimers(); setReqStatus('paid'); haptic('success'); $('rv-timer').textContent = '—'; }
+  }
+  function showRequest(r) {
+    stopReqTimers(); curReq = r;
+    $('reqform').hidden = true; $('req-view').hidden = false;
+    $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.amount;
+    renderQr(r.address); setReqStatus('wait');
+    var end = new Date(r.expires_at).getTime();
+    function paint() {
+      var left = end - Date.now();
+      $('rv-timer').textContent = fmt(left);
+      if (left <= 0 && curReq && curReq.request_no === r.request_no && !curReq.paid) setReqStatus('expired');
+    }
+    paint(); tick = setInterval(paint, 1000); poll = setInterval(checkPaid, 8000);
+  }
+  async function loadOpenRequest() {
+    $('reqmsg').hidden = true;
+    var r = await callReq({ check: true });
+    if (r.ok && r.data.request) showRequest(r.data.request);
+    else { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; }
+  }
+  $('reqform').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (!ggId) { reqErr('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.'); return; }
+    $('reqmsg').hidden = true; $('reqbtn').disabled = true;
+    var r = await callReq({ amount: $('reqamt').value, fresh: true });
+    $('reqbtn').disabled = false;
+    if (r.ok && r.data.request) { showRequest(r.data.request); return; }
+    var er = r.data && r.data.error;
+    if (er === 'below minimum') reqErr('Minimum deposit is ' + r.data.min + ' USDT.', 'Минимальный депозит: ' + r.data.min + ' USDT.');
+    else if (er === 'above maximum') reqErr('Maximum deposit is ' + r.data.max + ' USDT.', 'Максимальный депозит: ' + r.data.max + ' USDT.');
+    else if (er === 'bad amount') reqErr('Enter a valid amount, for example 50.', 'Введите корректную сумму, например 50.');
+    else reqErr('Could not create the request. Please try again.', 'Не удалось создать заявку. Попробуйте ещё раз.');
+  });
+  $('rv-new').addEventListener('click', function () { stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; });
+  document.querySelectorAll('[data-copy-from]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var txt = $(b.dataset.copyFrom).textContent; if (!txt || txt === '—') return;
+      var done = function () { haptic('success'); var o = b.innerHTML; b.innerHTML = bi('Copied', 'Скопировано'); setTimeout(function () { b.innerHTML = o; }, 1500); };
+      if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, function () {});
+    });
   });
 
   /* ---------- start ---------- */

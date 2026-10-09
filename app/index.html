@@ -43,20 +43,62 @@
 
   <!-- Deposit -->
   <section id="tab-deposit" class="pane">
-    <div class="card">
-      <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b id="dep-net">USDT · TRC20</b></div>
-      <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id">—</b></div>
+
+    <!-- TRC20: a deposit request (exact amount, 30 minutes) -->
+    <div id="trc-flow" class="stack">
+      <form class="card" id="reqform" autocomplete="off">
+        <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b>USDT · TRC20</b></div>
+        <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id2">—</b></div>
+        <label for="reqamt"><span class="en">Amount, USDT</span><span class="ru">Сумма, USDT</span></label>
+        <input id="reqamt" inputmode="decimal" value="50" placeholder="50">
+        <p class="note" id="reqmsg" hidden></p>
+        <button class="btn primary" type="submit" id="reqbtn"><span class="en">Create deposit request</span><span class="ru">Создать заявку на депозит</span></button>
+      </form>
+
+      <div id="req-view" class="stack" hidden>
+        <div class="card">
+          <div class="row"><span class="muted"><span class="en">Request number</span><span class="ru">Номер заявки</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+          <div class="mono" id="rv-no">—</div>
+          <div class="row"><span class="muted"><span class="en">Token</span><span class="ru">Токен</span></span><b>Tether USDT</b></div>
+          <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b>TRC20</b></div>
+
+          <div class="row"><span class="muted"><span class="en">Wallet address</span><span class="ru">Адрес кошелька</span></span><button class="chip" type="button" data-copy-from="rv-addr"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+          <div class="addr" id="rv-addr">—</div>
+
+          <div class="row"><span class="muted"><span class="en">Exact amount to send</span><span class="ru">Точная сумма перевода</span></span><button class="chip" type="button" data-copy-from="rv-amt"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+          <div class="amt"><span id="rv-amt">—</span> <small>USDT</small></div>
+
+          <div class="qr" id="rv-qr"></div>
+
+          <div class="row"><span class="muted"><span class="en">Valid for</span><span class="ru">Действителен</span></span><b id="rv-timer">30:00</b></div>
+          <p class="note" id="rv-status"><span class="en">Waiting for your payment…</span><span class="ru">Ждём ваш платёж…</span></p>
+        </div>
+        <button class="btn" id="rv-new" type="button"><span class="en">Create a new request</span><span class="ru">Создать новую заявку</span></button>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="label"><span class="en">Your deposit address</span><span class="ru">Ваш адрес для депозита</span></div>
-      <div class="addr" id="addr">—</div>
-      <button class="btn primary" id="copy" type="button" disabled><span class="en">Copy address</span><span class="ru">Скопировать адрес</span></button>
-      <p class="hint" id="addr-note"></p>
+    <!-- BEP20: personal address -->
+    <div id="bep-flow" class="stack" hidden>
+      <div class="card">
+        <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b id="dep-net">USDT · BEP20</b></div>
+        <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id">—</b></div>
+      </div>
+      <div class="card">
+        <div class="label"><span class="en">Your deposit address</span><span class="ru">Ваш адрес для депозита</span></div>
+        <div class="addr" id="addr">—</div>
+        <button class="btn primary" id="copy" type="button" disabled><span class="en">Copy address</span><span class="ru">Скопировать адрес</span></button>
+        <p class="hint" id="addr-note"></p>
+      </div>
     </div>
 
-    <ol class="steps">
-      <li><span class="en">Send USDT <b>on the <span class="netname">TRC20</span> network only</b> to the address above.</span><span class="ru">Отправьте USDT <b>только в сети <span class="netname">TRC20</span></b> на адрес выше.</span></li>
+    <ol class="steps only-trc">
+      <li><span class="en">Enter the amount and create a request. You get an address and an <b>exact amount</b>.</span><span class="ru">Введите сумму и создайте заявку. Вы получите адрес и <b>точную сумму</b>.</span></li>
+      <li><span class="en">Send <b>exactly that amount</b> of USDT on the <b>TRC20</b> network within 30 minutes. The small tail of the amount identifies your payment, so do not round it.</span><span class="ru">Отправьте <b>ровно эту сумму</b> USDT в сети <b>TRC20</b> в течение 30 минут. Небольшой «хвост» суммы опознаёт ваш платёж, поэтому не округляйте её.</span></li>
+      <li><span class="en">Minimum deposit: <b class="mindep">10</b> USDT.</span><span class="ru">Минимальный депозит: <b class="mindep">10</b> USDT.</span></li>
+      <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
+    </ol>
+    <ol class="steps only-bep">
+      <li><span class="en">Send USDT <b>on the BEP20 network only</b> to the address above.</span><span class="ru">Отправьте USDT <b>только в сети BEP20</b> на адрес выше.</span></li>
       <li><span class="en">Minimum deposit: <b class="mindep">10</b> USDT. Smaller amounts are not credited.</span><span class="ru">Минимальный депозит: <b class="mindep">10</b> USDT. Меньшие суммы не зачисляются.</span></li>
       <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
     </ol>
@@ -106,6 +148,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js"></script>
 <script src="../assets/app.js"></script>
 </body>

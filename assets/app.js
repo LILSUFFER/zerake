@@ -129,7 +129,7 @@
   }
   var LABEL = {
     received: ['Received, chips on the way', 'Получено, фишки в пути'], chips_sent: ['Chips sent', 'Фишки отправлены'],
-    pending: ['Pending', 'В обработке'], approved: ['Approved', 'Одобрено'], paid: ['Paid', 'Выплачено'], rejected: ['Rejected', 'Отклонено']
+    pending: ['Pending', 'В обработке'], approved: ['Chips taken, payout on the way', 'Фишки сняты, выплата в пути'], paid: ['Paid', 'Выплачено'], rejected: ['Rejected', 'Отклонено']
   };
   function renderHistory() {
     var box = $('hist'); if (!box) return;
@@ -400,14 +400,17 @@
       card.appendChild(el('div', 'note', bi('Take these chips from the player in ClubGG (check the balance), then pay and press "I paid it".', 'Снимите эти фишки с игрока в ClubGG (проверьте баланс), затем выплатите и нажмите «Я выплатил».')));
       if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + w.claimed_name));
       var b = el('div', 'tbtns');
-      if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));
+      if (w.status === 'approved') {
+        card.appendChild(el('div', 'tstat', bi('Chips taken. Send the USDT, then confirm.', 'Фишки сняты. Отправьте USDT и подтвердите.')));
+        b.appendChild(btn('primary', bi('I paid it', 'Я выплатил'), function () { payForm(card, w); }));
+      } else if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));
       else if (mine) {
         b.className = 'tbtns two';
-        b.appendChild(btn('primary', bi('I paid it', 'Я выплатил'), function () { payForm(card, w); }));
+        b.appendChild(btn('primary', bi('Chips taken', 'Фишки сняты'), function () { takenForm(card, w); }));
         b.appendChild(btn('', bi('Release', 'Отпустить'), function () { wact('wrelease', w.id); }));
       } else if (staffRole === 'owner') b.appendChild(btn('', bi('Take over', 'Забрать себе'), function () { wact('wclaim', w.id); }));
       if (b.childNodes.length) card.appendChild(b);
-      if (mine || staffRole === 'owner') {
+      if (w.status === 'pending' && (mine || staffRole === 'owner')) {
         var rj = el('button', 'linkish', bi('Reject', 'Отклонить')); rj.type = 'button';
         rj.addEventListener('click', function () { ask('Reject this cash out?', 'Отклонить этот вывод?', function () { wact('wreject', w.id); }); });
         card.appendChild(rj);
@@ -415,6 +418,20 @@
       box.appendChild(card);
     });
     return { nNew: nNew, nMine: nMine, free: items.filter(function (w) { return !w.claimed_name; }).map(function (w) { return 'w' + w.id; }) };
+  }
+  function takenForm(card, w) {
+    var f = el('div', 'stack');
+    f.appendChild(el('div', 'note', bi('Type the amount you took from the player. It must match the request exactly.', 'Введите сумму, которую вы сняли с игрока. Она должна точно совпасть с заявкой.')));
+    var inp = el('input', 'txin'); inp.inputMode = 'decimal'; inp.placeholder = t('Amount taken, USDT', 'Снятая сумма, USDT');
+    f.appendChild(inp);
+    f.appendChild(btn('primary', bi('Confirm', 'Подтвердить'), function (b) {
+      adminCall({ action: 'wtaken', id: w.id, amount: inp.value }).then(function (r) {
+        if (r.ok) { haptic('success'); loadAdmin(false); return; }
+        haptic('error'); b.disabled = false;
+        try { tg.showAlert(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.amount) + ' USDT).', 'Сумма не совпадает с заявкой (' + Number(w.amount) + ' USDT).') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
+      });
+    }));
+    card.appendChild(f);
   }
   function payForm(card, w) {
     var f = el('div', 'stack');

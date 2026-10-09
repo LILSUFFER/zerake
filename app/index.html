@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=18">
+<link rel="stylesheet" href="../assets/app.css?v=20">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -100,7 +100,8 @@
           <p class="note" id="rv-status"><span class="en">Waiting for your payment…</span><span class="ru">Ждём ваш платёж…</span></p>
           <div class="reqno"><span><span class="en">Request</span><span class="ru">Заявка</span> <span class="mono" id="rv-no">—</span></span><button class="chip" type="button" data-copy-from="rv-no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
         </div>
-        <button class="btn" id="rv-new" type="button"><span class="en">Create a new request</span><span class="ru">Создать новую заявку</span></button>
+        <button class="btn ghost-red" id="rv-cancel" type="button"><span class="en">Cancel request</span><span class="ru">Отменить заявку</span></button>
+        <button class="btn" id="rv-new" type="button"><span class="en">Make another deposit</span><span class="ru">Сделать ещё депозит</span></button>
       </div>
     </div>
 
@@ -209,6 +210,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=19"></script>
+<script src="../assets/app.js?v=20"></script>
 </body>
 </html>

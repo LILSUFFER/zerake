@@ -326,6 +326,16 @@
     else if (er === 'bad amount') reqErr('Enter a valid amount, for example 50.', 'Введите корректную сумму, например 50.');
     else reqErr('Could not create the request. Please try again.', 'Не удалось создать заявку. Попробуйте ещё раз.');
   });
+  function backToForm() { reqCache[net] = null; recentPaid[net] = null; stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form'); }
+  $('rv-cancel').addEventListener('click', function () {
+    var b = $('rv-cancel');
+    ask('Cancel this request? If you have already sent the money, do not cancel: we will find the payment.', 'Отменить заявку? Если вы уже отправили деньги, не отменяйте: мы найдём платёж.', async function () {
+      b.disabled = true;
+      var r = await callReq({ cancel: true });
+      b.disabled = false;
+      if (r.ok) { haptic('success'); backToForm(); } else { haptic('error'); reqErr('Could not cancel. Please try again.', 'Не удалось отменить. Попробуйте ещё раз.'); }
+    });
+  });
   $('rv-new').addEventListener('click', function () { reqCache[net] = null; recentPaid[net] = null; stopReqTimers(); curReq = null; $('req-view').hidden = true; $('reqform').hidden = false; setState('form'); });
   document.querySelectorAll('[data-copy-from]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -365,8 +375,9 @@
   }
   function ask(en, ru, yes) {
     var msg = t(en, ru);
-    if (tg && tg.showConfirm) tg.showConfirm(msg, function (ok) { if (ok) yes(); else loadAdmin(false); });
-    else if (window.confirm(msg)) yes(); else loadAdmin(false);
+    var no = function () { if (staffRole) loadAdmin(false); };
+    if (tg && tg.showConfirm) tg.showConfirm(msg, function (ok) { if (ok) yes(); else no(); });
+    else if (window.confirm(msg)) yes(); else no();
   }
   async function act(action, id) {
     var r = await adminCall({ action: action, id: id });

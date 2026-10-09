@@ -170,7 +170,7 @@ input:focus { outline: none; border-color: var(--green-line); box-shadow: 0 0 0 
 #tab-deposit.st-open .steps, #tab-deposit.st-open .hints,
 #tab-deposit.st-paid .steps, #tab-deposit.st-paid .hints { display: none !important; }
 body.paid-view #nets { display: none; }
-#rv-new { background: none; border: 0; color: var(--soft); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; padding: 6px; box-shadow: none; }
+#tab-deposit.st-paid #rv-new { background: none; border: 0; color: var(--soft); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; padding: 6px; box-shadow: none; }
 #tab-deposit.st-paid .paidbox { padding: 34px 22px; }
 
 /* withdraw summary */
@@ -257,3 +257,8 @@ main { overflow-x: hidden; }
 .logr { text-align: right; flex: none; }
 .logr b { display: block; }
 .logdet { margin: 8px 0 0; padding: 10px 12px; background: var(--card-2); border: 1px solid var(--line); border-radius: var(--r-sm); font: 12px/1.6 ui-monospace, Consolas, monospace; color: var(--soft); white-space: pre-wrap; word-break: break-all; }
+
+.btn.ghost-red { background: none; border-color: rgba(255,107,107,.35); color: var(--red); }
+.btn.ghost-red:hover { background: var(--red-bg); }
+/* while paying: only "cancel"; after the payment: only "make another deposit" */
+#tab-deposit.st-open #rv-new, #tab-deposit.st-paid #rv-cancel { display: none !important; }

@@ -126,6 +126,10 @@ Deno.serve(async (req: Request) => {
     .eq("user_id", u.user.id).eq("network", network).eq("status", "open").gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (body.check === true) return out({ request: live.data ?? null }, 200, h);          // read-only: "do I have one?"
+  if (body.cancel === true) {                       // the player cancels the open request (a late payment is still found)
+    if (live.data) await admin.from("deposit_requests").update({ status: "expired", expires_at: new Date().toISOString() }).eq("request_no", live.data.request_no).eq("status", "open");
+    return out({ ok: true }, 200, h);
+  }
   if (!cfg.enabled) return out({ error: "network disabled" }, 503, h);
   if (live.data && body.fresh !== true) return out({ request: live.data, existing: true }, 200, h);
   if (live.data) await admin.from("deposit_requests").update({ status: "expired", expires_at: new Date().toISOString() }).eq("request_no", live.data.request_no);

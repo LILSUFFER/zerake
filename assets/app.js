@@ -129,7 +129,7 @@
   }
   var LABEL = {
     received: ['Received, chips on the way', 'Получено, фишки в пути'], chips_sent: ['Chips sent', 'Фишки отправлены'],
-    pending: ['Pending', 'В обработке'], approved: ['Chips taken, payout on the way', 'Фишки сняты, выплата в пути'], paid: ['Paid', 'Выплачено'], rejected: ['Rejected', 'Отклонено']
+    pending: ['Pending', 'В обработке'], approved: ['Chips taken, payout on the way', 'Фишки сняты, выплата в пути'], sending: ['Sending USDT…', 'Отправляем USDT…'], paid: ['Paid', 'Выплачено'], rejected: ['Rejected', 'Отклонено']
   };
   function renderHistory() {
     var box = $('hist'); if (!box) return;
@@ -404,9 +404,16 @@
       card.appendChild(el('div', 'note', bi('Take these chips from the player in ClubGG (check the balance), then pay and press "I paid it".', 'Снимите эти фишки с игрока в ClubGG (проверьте баланс), затем выплатите и нажмите «Я выплатил».')));
       if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + w.claimed_name));
       var b = el('div', 'tbtns');
-      if (w.status === 'approved') {
-        card.appendChild(el('div', 'tstat', bi('Chips taken. Send the USDT, then confirm.', 'Фишки сняты. Отправьте USDT и подтвердите.')));
-        b.appendChild(btn('primary', bi('I paid it', 'Я выплатил'), function () { payForm(card, w); }));
+      if (w.status === 'sending') {
+        card.appendChild(el('div', w.note ? 'note bad' : 'tstat', w.note ? '' : bi('Sending USDT automatically…', 'USDT отправляются автоматически…')));
+        if (w.note) card.lastChild.textContent = w.note;
+        if (staffRole === 'owner') b.appendChild(btn('', bi('Checked: it was paid', 'Проверил: выплачено'), function () { payForm(card, w); }));
+      } else if (w.status === 'approved') {
+        var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note || t('unknown reason', 'причина неизвестна'));
+        card.appendChild(why);
+        b.className = 'tbtns two';
+        b.appendChild(btn('primary', bi('Try again', 'Повторить'), function () { wact('wretry', w.id); }));
+        b.appendChild(btn('', bi('I paid by hand', 'Выплатил вручную'), function () { payForm(card, w); }));
       } else if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));
       else if (mine) {
         b.className = 'tbtns two';
@@ -430,7 +437,12 @@
     f.appendChild(inp);
     f.appendChild(btn('primary', bi('Confirm', 'Подтвердить'), function (b) {
       adminCall({ action: 'wtaken', id: w.id, amount: inp.value }).then(function (r) {
-        if (r.ok) { haptic('success'); loadAdmin(false); return; }
+        if (r.ok) {
+          var p = r.data.payout || {};
+          haptic(p.ok ? 'success' : 'warning');
+          try { tg.showAlert(p.ok ? t('Done. USDT sent automatically.', 'Готово. USDT отправлены автоматически.') : t('Chips confirmed, but the auto payout did not go through: ', 'Фишки подтверждены, но автовыплата не прошла: ') + (p.reason || '')); } catch (e) {}
+          loadAdmin(false); return;
+        }
         haptic('error'); b.disabled = false;
         try { tg.showAlert(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.amount) + ' USDT).', 'Сумма не совпадает с заявкой (' + Number(w.amount) + ' USDT).') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
       });
@@ -447,6 +459,7 @@
   async function wact(action, id, extra) {
     var r = await adminCall(Object.assign({ action: action, id: id }, extra || {}));
     if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Это уже взял или закрыл кто-то другой.')); } catch (e) {} }
+    else if (r.ok && r.data.payout && !r.data.payout.ok) { haptic('error'); try { tg.showAlert(t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (r.data.payout.reason || '')); } catch (e) {} }
     else if (!r.ok) { haptic('error'); try { tg.showAlert(t('Could not save. Check the transfer hash and try again.', 'Не удалось сохранить. Проверьте хеш перевода и повторите.')); } catch (e) {} }
     else haptic('success');
     loadAdmin(false);
@@ -481,6 +494,20 @@
     }));
     if (staffRole === 'owner') {
       $('adm-owner').hidden = false;
+      if (full) adminCall({ action: 'wallet' }).then(function (r) {
+        var box = $('adm-wallet'); if (!box || !r.ok) return; box.innerHTML = '';
+        if (!r.data.ready) { box.appendChild(el('div', 'note bad', bi('Auto payout is off: the wallet key is not set on the server.', 'Автовыплаты выключены: ключ кошелька не задан на сервере.'))); return; }
+        ['TRC20', 'BEP20'].forEach(function (n) {
+          var x = r.data[n] || {}; var row = el('div', 'tcard');
+          row.appendChild(el('div', 'trow', '<div class="tamt">' + (x.pool_usdt != null ? Number(x.pool_usdt) : '—') + ' USDT</div><div class="tnet">' + n + '</div>'));
+          if (x.error) { var er = el('div', 'note bad', ''); er.textContent = x.error; row.appendChild(er); }
+          else {
+            row.appendChild(el('div', 'tmeta', bi('Fee wallet: ', 'Кошелёк для комиссий: ') + '<b>' + x.gas_balance + '</b>'));
+            var ar = el('div', 'tid'); var ad = el('div', 'addr', ''); ad.textContent = x.gas_address; ar.appendChild(ad); ar.appendChild(copyChip(x.gas_address)); row.appendChild(ar);
+          }
+          box.appendChild(row);
+        });
+      });
       var s = await adminCall({ action: 'staff_list' });
       if (s.ok) {
         var box = $('adm-staff'); box.innerHTML = '';

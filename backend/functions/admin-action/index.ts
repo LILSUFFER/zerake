@@ -35,6 +35,18 @@ async function tell(admin: ReturnType<typeof createClient>, userId: string, text
   }).catch(() => {});
 }
 
+async function callPayout(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  try {
+    const r = await fetch(Deno.env.get("SUPABASE_URL")! + "/functions/v1/send-payout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")! },
+      body: JSON.stringify(payload),
+    });
+    return await r.json();
+  } catch (e) { return { ok: false, reason: "payout service unavailable: " + String(e) }; }
+}
+const autoPay = (id: number) => callPayout({ id });
+
 Deno.serve(async (req: Request) => {
   const h = cors(req.headers.get("origin"));
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
@@ -134,7 +146,7 @@ Deno.serve(async (req: Request) => {
     const pending = action === "wqueue";
     const q = admin.from("withdrawals").select("id,amount,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
     const { data: ws } = pending
-      ? await q.in("status", ["pending", "approved"]).order("created_at", { ascending: true }).limit(100)
+      ? await q.in("status", ["pending", "approved", "sending"]).order("created_at", { ascending: true }).limit(100)
       : await q.in("status", ["paid", "rejected"]).order("handled_at", { ascending: false }).limit(15);
     const rows = ws ?? [];
     const ids = [...new Set(rows.map((w) => w.user_id))];
@@ -176,10 +188,20 @@ Deno.serve(async (req: Request) => {
     const r = await admin.from("withdrawals").update({ status: "approved", handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString() })
       .eq("id", id).eq("status", "pending").select("user_id,amount,network");
     if (r.error || (r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
-    await tell(admin, r.data![0].user_id, `✅ Chips taken from your ID. Your ${Number(r.data![0].amount)} USDT (${r.data![0].network}) payout is on the way.
+    const payout = await autoPay(id);
+    if (!payout.ok) await tell(admin, r.data![0].user_id, `✅ Chips taken from your ID. Your ${Number(r.data![0].amount)} USDT (${r.data![0].network}) payout is on the way.
 
 ✅ Фишки сняты с вашего ID. Выплата ${Number(r.data![0].amount)} USDT (${r.data![0].network}) в пути.`);
-    return out({ ok: true }, 200, h);
+    return out({ ok: true, payout }, 200, h);
+  }
+  if (action === "wretry") {
+    const id = Number(body.id);
+    if (!Number.isInteger(id)) return out({ error: "bad id" }, 400, h);
+    return out({ ok: true, payout: await autoPay(id) }, 200, h);
+  }
+  if (action === "wallet") {
+    if (role !== "owner") return out({ error: "owner only" }, 403, h);
+    return out(await callPayout({ info: true }), 200, h);
   }
   if (action === "wpaid" || action === "wreject") {
     const id = Number(body.id);
@@ -191,7 +213,7 @@ Deno.serve(async (req: Request) => {
     const q = admin.from("withdrawals").update({
       status: paid ? "paid" : "rejected", tx_hash: paid && tx ? tx : null, note: note || null,
       handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString(),
-    }).eq("id", id).eq("status", paid ? "approved" : "pending");   // pay only after the chips were taken
+    }).eq("id", id).in("status", paid ? ["approved", "sending"] : ["pending"]);   // pay only after the chips were taken
     // only the person who took it (or the owner) may finish it
     const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount,network,address");
     if (r.error) { console.error(action + ":", r.error.message); return out({ error: "failed" }, 500, h); }

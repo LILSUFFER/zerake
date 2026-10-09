@@ -232,7 +232,7 @@
     var m = $('s-ggmsg'); m.hidden = true;
     var id = $('s-ggin').value.replace(/[\s-]/g, '');
     if (!/^[0-9]{5,10}$/.test(id)) { m.className = 'note bad'; m.innerHTML = bi('The ID must be 5–10 digits.', 'ID должен состоять из 5–10 цифр.'); m.hidden = false; return; }
-    ask('Save ClubGG ID ' + fid(id) + '? After your first deposit it cannot be changed.', 'Сохранить ID ' + fid(id) + '? После первого депозита сменить его будет нельзя.', async function () {
+    ask('Save ClubGG ID ' + fid(id) + '? After your first deposit it can be changed only through support.', 'Сохранить ID ' + fid(id) + '? После первого депозита сменить его можно будет только через поддержку.', async function () {
       var r = await sb.from('profiles').upsert({ user_id: me.id, gg_id: id, updated_at: new Date().toISOString() });
       if (r.error) { m.className = 'note bad'; m.hidden = false; m.innerHTML = /duplicate|unique/i.test(r.error.message) ? bi('This ID is already used by another account. If it is yours, write to support.', 'Этот ID уже привязан к другому аккаунту. Если он ваш — напишите в поддержку.') : /locked/i.test(r.error.message) ? bi('The ID is locked. Change it through support.', 'ID заблокирован для смены. Сменить можно через поддержку.') : bi('Could not save.', 'Не удалось сохранить.'); return; }
       haptic('success'); toast(t('ClubGG ID saved', 'ID в ClubGG сохранён'));
@@ -410,7 +410,7 @@
     if (net === 'TON' || net === 'GRAM') a = tonNormalize(a);
     if (!ADDR_RE[net].test(a)) { m.className = 'note bad'; m.innerHTML = bi(ADDR_HINT[net][0], ADDR_HINT[net][1]); m.hidden = false; return; }
     if (!$('bindok').checked) { m.className = 'note bad'; m.innerHTML = bi('Please confirm it is your personal wallet.', 'Подтвердите, что это ваш личный кошелёк.'); m.hidden = false; return; }
-    ask('Bind ' + a + ' for good? It cannot be changed later.', 'Привязать ' + a + ' навсегда? Сменить его потом будет нельзя.', async function () {
+    ask('Bind ' + a + '? Cash outs on this network will go only to it. You can change it later only with your recovery code (takes 48 hours).', 'Привязать ' + a + '? Выводы в этой сети будут уходить только на него. Сменить его можно только с кодом восстановления (через 48 часов).', async function () {
       $('bindbtn').disabled = true;
       var r = await walletCall({ action: 'bind', chain: CHAIN_OF[net], address: a });
       $('bindbtn').disabled = false;

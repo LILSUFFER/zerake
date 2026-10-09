@@ -69,11 +69,11 @@
         <h2 class="ctitle"><span class="en">Bind your <span class="chainname">Tron</span> wallet</span><span class="ru">Привяжите кошелёк <span class="chainname">Tron</span></span></h2>
         <span class="pill">🔒</span>
       </div>
-      <p class="payhint"><span class="en">Before the first deposit, tell us the wallet you will pay from. Cash outs on this network go <b>only</b> to it. It cannot be changed later, so this protects your money even if someone gets into your account.</span><span class="ru">Перед первым депозитом укажите кошелёк, с которого будете пополнять. Выводы в этой сети уходят <b>только</b> на него. Сменить его потом нельзя: это защищает ваши деньги, даже если кто-то получит доступ к аккаунту.</span></p>
+      <p class="payhint"><span class="en">Before the first deposit, tell us the wallet you will pay from. Cash outs on this network go <b>only</b> to it, so even if someone gets into your account they cannot take the money. You can change it later only with your recovery code (takes 48 hours).</span><span class="ru">Перед первым депозитом укажите кошелёк, с которого будете пополнять. Выводы в этой сети уходят <b>только</b> на него, поэтому даже если кто-то получит доступ к аккаунту, забрать деньги он не сможет. Сменить кошелёк можно только с кодом восстановления (через 48 часов).</span></p>
       <input id="bindaddr" spellcheck="false" autocapitalize="off" placeholder="T..." style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
       <label class="chk"><input type="checkbox" id="bindok"> <span><span class="en">This is my personal wallet (not an exchange address) and I have checked it.</span><span class="ru">Это мой личный кошелёк (не адрес биржи), я его проверил.</span></span></label>
       <p class="note" id="bindmsg" hidden></p>
-      <button class="btn primary" type="button" id="bindbtn"><span class="en">Bind for good</span><span class="ru">Привязать навсегда</span></button>
+      <button class="btn primary" type="button" id="bindbtn"><span class="en">Bind wallet</span><span class="ru">Привязать кошелёк</span></button>
     </div>
 
     <div id="trc-flow" class="stack">
@@ -339,6 +339,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=30"></script>
+<script src="../assets/app.js?v=31"></script>
 </body>
 </html>

@@ -401,7 +401,7 @@
       ar.appendChild(copyChip(w.address));
       card.appendChild(ar);
       card.appendChild(el('div', 'tmeta', bi('Waiting ', 'Ждёт ') + ago(w.created_at)));
-      card.appendChild(el('div', 'note', bi('Take these chips from the player in ClubGG (check the balance), then pay and press "I paid it".', 'Снимите эти фишки с игрока в ClubGG (проверьте баланс), затем выплатите и нажмите «Я выплатил».')));
+      if (w.status === 'pending') card.appendChild(el('div', 'note', bi('Take these chips from the player in ClubGG (check the balance), then press "Chips taken". USDT is sent automatically.', 'Снимите эти фишки с игрока в ClubGG (проверьте баланс) и нажмите «Фишки сняты». USDT отправятся автоматически.')));
       if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + w.claimed_name));
       var b = el('div', 'tbtns');
       if (w.status === 'sending') {
@@ -409,11 +409,10 @@
         if (w.note) card.lastChild.textContent = w.note;
         if (staffRole === 'owner') b.appendChild(btn('', bi('Checked: it was paid', 'Проверил: выплачено'), function () { payForm(card, w); }));
       } else if (w.status === 'approved') {
-        var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note || t('unknown reason', 'причина неизвестна'));
+        var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note || t('automatic payouts are not switched on yet', 'автовыплаты ещё не включены на сервере'));
         card.appendChild(why);
-        b.className = 'tbtns two';
-        b.appendChild(btn('primary', bi('Try again', 'Повторить'), function () { wact('wretry', w.id); }));
-        b.appendChild(btn('', bi('I paid by hand', 'Выплатил вручную'), function () { payForm(card, w); }));
+        if (w.note) { b.className = 'tbtns two'; b.appendChild(btn('primary', bi('Try again', 'Повторить'), function () { wact('wretry', w.id); })); }
+        b.appendChild(btn(w.note ? '' : 'primary', bi('I paid by hand', 'Выплатил вручную'), function () { payForm(card, w); }));
       } else if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));
       else if (mine) {
         b.className = 'tbtns two';

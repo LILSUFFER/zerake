@@ -20,6 +20,7 @@ alter table public.withdrawals add  constraint withdrawals_address_format check 
 );
 -- Manager handling of withdrawals (take it, then mark it paid with the transfer hash).
 alter table public.withdrawals add column if not exists claimed_by   uuid references auth.users (id);
+alter table public.withdrawals add column if not exists handled_by   uuid references auth.users (id);
 alter table public.withdrawals add column if not exists claimed_name text;
 alter table public.withdrawals add column if not exists claimed_at   timestamptz;
 alter table public.withdrawals add column if not exists handled_name text;

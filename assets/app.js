@@ -181,7 +181,7 @@
       return;
     }
     haptic('success');
-    wmsg('Request sent. We will pay out after the chips are received.', 'Запрос отправлен. Выплатим после получения фишек.', false);
+    wmsg('Request sent. A manager will take the chips from your ClubGG ID and pay you.', 'Запрос отправлен. Менеджер снимет фишки с вашего ID и выплатит вам USDT.', false);
     $('wamt').value = ''; $('waddr').value = '';
   });
 
@@ -397,7 +397,7 @@
       ar.appendChild(copyChip(w.address));
       card.appendChild(ar);
       card.appendChild(el('div', 'tmeta', bi('Waiting ', 'Ждёт ') + ago(w.created_at)));
-      card.appendChild(el('div', 'note', bi('First check in ClubGG that these chips came back to the club.', 'Сначала проверьте в ClubGG, что фишки вернулись клубу.')));
+      card.appendChild(el('div', 'note', bi('Take these chips from the player in ClubGG (check the balance), then pay and press "I paid it".', 'Снимите эти фишки с игрока в ClubGG (проверьте баланс), затем выплатите и нажмите «Я выплатил».')));
       if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + w.claimed_name));
       var b = el('div', 'tbtns');
       if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));

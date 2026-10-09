@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (botToken) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
-    const text = `💸 Cash out: ${Number(amount)} USDT (${network})\nClubGG ID: ${profile.gg_id}\nTo: ${address}\nCheck in ClubGG that the chips came back, then take it and pay.`;
+    const text = `💸 Cash out: ${Number(amount)} USDT (${network})\nClubGG ID: ${profile.gg_id}\nTo: ${address}\nTake it, remove the chips from this ID in ClubGG, then pay.`;
     for (const s of staff ?? []) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },

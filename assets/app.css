@@ -245,3 +245,15 @@ body.paid-view #nets { display: none; }
 }
 .pane, .stack, .card, .reqgrid > *, .kv, .addrbox .addr { min-width: 0; }
 main { overflow-x: hidden; }
+
+.opid { font: 500 11px/1.4 ui-monospace, Consolas, monospace; color: var(--dim); letter-spacing: .02em; text-transform: none; cursor: pointer; }
+.item .opid { display: block; margin-top: 2px; }
+.loglist { display: grid; max-height: 520px; overflow-y: auto; margin: 0 -6px; }
+.logrow { border-top: 1px solid var(--line); padding: 10px 6px; }
+.logrow:first-child { border-top: 0; }
+.loghead { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; }
+.loghead b { font-weight: 500; font-size: 14px; }
+.loghead small { display: block; color: var(--soft); font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+.logr { text-align: right; flex: none; }
+.logr b { display: block; }
+.logdet { margin: 8px 0 0; padding: 10px 12px; background: var(--card-2); border: 1px solid var(--line); border-radius: var(--r-sm); font: 12px/1.6 ui-monospace, Consolas, monospace; color: var(--soft); white-space: pre-wrap; word-break: break-all; }

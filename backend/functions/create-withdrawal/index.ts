@@ -81,14 +81,14 @@ Deno.serve(async (req: Request) => {
   const fee = calcFee(amount, Number(cfg.wd_fee_fixed ?? 0), Number(cfg.wd_fee_pct ?? 0));
   const net = (Math.round(Number(amount) * 100) - Math.round(Number(fee) * 100)) / 100;
   if (net < 1) return out({ error: "below fee", fee }, 400, h);
-  const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2) }).select("id").single();
+  const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2) }).select("id,op_id").single();
   if (ins.error) { console.error("withdrawal insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
 
   // Alert every manager (the queue button opens the Mini App on the managers' tab).
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (botToken) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
-    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nClubGG ID: ${profile.gg_id}\nPayout: ${net} USDT (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
+    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nOperation: ${ins.data.op_id}\nClubGG ID: ${profile.gg_id}\nPayout: ${net} USDT (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
     for (const s of staff ?? []) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -97,5 +97,5 @@ Deno.serve(async (req: Request) => {
       }).catch(() => {});
     }
   }
-  return out({ ok: true, id: ins.data.id, fee: Number(fee), payout: net }, 200, h);
+  return out({ ok: true, id: ins.data.id, op_id: ins.data.op_id, fee: Number(fee), payout: net }, 200, h);
 });

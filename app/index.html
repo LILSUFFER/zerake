@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=17">
+<link rel="stylesheet" href="../assets/app.css?v=18">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -168,6 +168,14 @@
       <div class="label"><span class="en">Done recently</span><span class="ru">Недавно выполнено</span></div>
       <div class="stack" id="adm-done"></div>
     </div>
+    <div class="card" id="adm-logcard">
+      <div class="label"><span class="en">Operations log</span><span class="ru">Журнал операций</span></div>
+      <form class="addstaff" id="adm-logform" autocomplete="off">
+        <input id="adm-logq" placeholder="DEP-… / WD-… / ClubGG ID" spellcheck="false" autocapitalize="off">
+        <button class="btn" type="submit"><span class="en">Find</span><span class="ru">Найти</span></button>
+      </form>
+      <div class="loglist" id="adm-log"></div>
+    </div>
     <div class="card" id="adm-owner" hidden>
       <div class="label"><span class="en">Club wallet (auto payouts)</span><span class="ru">Кошелёк клуба (автовыплаты)</span></div>
       <div class="stack" id="adm-wallet"></div>
@@ -201,6 +209,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=17"></script>
+<script src="../assets/app.js?v=18"></script>
 </body>
 </html>

@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
 
   if (action === "queue" || action === "done") {
     const pending = action === "queue";
-    const q = admin.from("deposits").select("id,amount,network,created_at,user_id,tx_hash,handled_at,handled_name,claimed_by,claimed_name,claimed_at");
+    const q = admin.from("deposits").select("id,op_id,amount,network,created_at,user_id,tx_hash,handled_at,handled_name,claimed_by,claimed_name,claimed_at");
     const { data: deps } = pending
       ? await q.eq("status", "received").order("created_at", { ascending: true }).limit(100)
       : await q.eq("status", "chips_sent").order("handled_at", { ascending: false }).limit(15);
@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
     return out({
       explorer: Object.fromEntries(ex.map((e) => [e.network, e.explorer_tx])),
       items: rows.map((d) => ({
-        id: d.id, amount: d.amount, network: d.network, created_at: d.created_at, handled_at: d.handled_at, handled_name: d.handled_name,
+        id: d.id, op_id: d.op_id, amount: d.amount, network: d.network, created_at: d.created_at, handled_at: d.handled_at, handled_name: d.handled_name,
         claimed_name: d.claimed_name, claimed_at: d.claimed_at, mine: d.claimed_by === u.user.id, tx_hash: d.tx_hash,
         gg_id: gg.get(d.user_id) ?? null, request_no: rq.get(d.tx_hash)?.request_no ?? null, base_amount: rq.get(d.tx_hash)?.base_amount ?? null,
       })),
@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
   // ---- cash-out requests ----
   if (action === "wqueue" || action === "wdone") {
     const pending = action === "wqueue";
-    const q = admin.from("withdrawals").select("id,amount,chips,fee,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
+    const q = admin.from("withdrawals").select("id,op_id,amount,chips,fee,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
     const { data: ws } = pending
       ? await q.in("status", ["pending", "approved", "sending"]).order("created_at", { ascending: true }).limit(100)
       : await q.in("status", ["paid", "rejected"]).order("handled_at", { ascending: false }).limit(15);
@@ -154,7 +154,7 @@ Deno.serve(async (req: Request) => {
     const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
     return out({
       items: rows.map((w) => ({
-        id: w.id, amount: w.amount, chips: w.chips ?? w.amount, fee: w.fee ?? 0, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
+        id: w.id, op_id: w.op_id, amount: w.amount, chips: w.chips ?? w.amount, fee: w.fee ?? 0, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
         handled_at: w.handled_at, handled_name: w.handled_name, claimed_name: w.claimed_name, mine: w.claimed_by === u.user.id,
         gg_id: gg.get(w.user_id) ?? null, tx_hash: w.tx_hash, note: w.note,
       })),
@@ -224,6 +224,24 @@ Deno.serve(async (req: Request) => {
       ? `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}${tx ? "\nTransfer: " + tx : ""}\n\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}${tx ? "\nПеревод: " + tx : ""}`
       : `⚠️ Your cash out of ${Number(w.amount)} USDT was not paid${note ? ": " + note : ""}. Please contact support.\n\n⚠️ Ваш вывод ${Number(w.amount)} USDT не выплачен${note ? ": " + note : ""}. Свяжитесь с поддержкой.`);
     return out({ ok: true }, 200, h);
+  }
+
+  // ---- operations log (every change of every deposit and cash out) ----
+  if (action === "log") {
+    const term = String(body.q ?? "").trim().replace(/[^A-Za-z0-9-]/g, "").slice(0, 40);
+    let q = admin.from("ops_log").select("id,op_id,kind,event,status,actor_name,amount,row_data,changed,at").order("id", { ascending: false }).limit(150);
+    if (term) {
+      const digits = term.replace(/-/g, "");
+      let users: string[] = [];
+      if (/^\d{4,12}$/.test(digits)) users = ((await admin.from("profiles").select("user_id").eq("gg_id", digits)).data ?? []).map((p) => p.user_id);
+      q = users.length ? q.or(`op_id.ilike.%${term}%,actor_id.in.(${users.join(",")})`) : q.ilike("op_id", `%${term}%`);
+    }
+    const { data: rows, error } = await q;
+    if (error) { console.error("log:", error.message); return out({ error: "failed" }, 500, h); }
+    const ids = [...new Set((rows ?? []).map((r) => r.row_data?.user_id).filter(Boolean))];
+    const prof = ids.length ? (await admin.from("profiles").select("user_id,gg_id").in("user_id", ids)).data ?? [] : [];
+    const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
+    return out({ items: (rows ?? []).map((r) => ({ ...r, gg_id: gg.get(r.row_data?.user_id) ?? null })) }, 200, h);
   }
 
   if (action === "unmatched") {

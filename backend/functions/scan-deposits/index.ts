@@ -165,9 +165,9 @@ Deno.serve(async () => {
         orphans.push({ network: c.network, tx_hash: f.tx_hash, address: f.to, from_address: f.from, amount: f.amount });
       }
     }
-    let created: Array<{ tx_hash: string; user_id: string; amount: string; status: string; to_address: string; request_id: number }> = [];
+    let created: Array<{ op_id: string; tx_hash: string; user_id: string; amount: string; status: string; to_address: string; request_id: number }> = [];
     if (rows.length) {
-      const ins = await admin.from("deposits").upsert(rows, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("tx_hash,user_id,amount,status,to_address,request_id");
+      const ins = await admin.from("deposits").upsert(rows, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,status,to_address,request_id");
       if (ins.error) throw new Error("save: " + ins.error.message);
       created = ins.data ?? [];
     }
@@ -177,9 +177,9 @@ Deno.serve(async () => {
     }
     for (const d of created.filter((x) => x.status === "received")) {
       const req = reqByTx.get(d.tx_hash)!;
-      await notifyUser(d.user_id, `✅ Payment received: ${d.amount} USDT.\nWe are sending the chips to your ClubGG ID now.\n\n✅ Платёж получен: ${d.amount} USDT.\nСейчас отправим фишки на ваш ID в ClubGG.`);
+      await notifyUser(d.user_id, `✅ Payment received: ${d.amount} USDT.\nWe are sending the chips to your ClubGG ID now.\nOperation: ${d.op_id}\n\n✅ Платёж получен: ${d.amount} USDT.\nСейчас отправим фишки на ваш ID в ClubGG.\nОперация: ${d.op_id}`);
       const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
-      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nClubGG ID: ${p.data?.gg_id ?? "NOT SET"}\nPaid: ${d.amount} USDT (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
+      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ?? "NOT SET"}\nPaid: ${d.amount} USDT (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
     }
     let orphanNew = 0;
     if (orphans.length) {

@@ -122,8 +122,8 @@
 
   var rows = [];
   async function loadHistory() {
-    var d = await sb.from('deposits').select('id,amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
-    var w = await sb.from('withdrawals').select('id,amount,chips,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
+    var d = await sb.from('deposits').select('id,op_id,amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
+    var w = await sb.from('withdrawals').select('id,op_id,amount,chips,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
     rows = []
       .concat((d.data || []).map(function (x) { x.kind = 'dep'; return x; }))
       .concat((w.data || []).map(function (x) { x.kind = 'wd'; return x; }))
@@ -147,6 +147,7 @@
       var title = document.createElement('div'); title.innerHTML = x.kind === 'dep' ? bi('Deposit', 'Депозит') : bi('Withdrawal', 'Вывод');
       var date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (x.network || 'TRC20');
       left.appendChild(title); left.appendChild(date);
+      if (x.op_id) { var oid = document.createElement('small'); oid.className = 'opid'; oid.textContent = x.op_id; oid.title = t('Tap to copy', 'Нажмите, чтобы скопировать'); oid.addEventListener('click', function () { if (navigator.clipboard) navigator.clipboard.writeText(x.op_id).then(function () { haptic('success'); oid.textContent = t('Copied', 'Скопировано'); setTimeout(function () { oid.textContent = x.op_id; }, 1200); }); }); left.appendChild(oid); }
       var right = document.createElement('div');
       var amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = (x.kind === 'dep' ? '+' : '−') + Number(x.kind === 'wd' && x.chips != null ? x.chips : x.amount) + (x.kind === 'wd' && x.chips != null && Number(x.chips) !== Number(x.amount) ? ' → ' + Number(x.amount) + ' USDT' : ' USDT');
       var st = document.createElement('div'); st.className = 'st' + (x.status === 'chips_sent' || x.status === 'paid' ? ' ok' : '');
@@ -204,7 +205,7 @@
       return;
     }
     haptic('success');
-    wmsg('Request sent. A manager will take the chips from your ClubGG ID and you will get ' + rd.payout + ' USDT.', 'Запрос отправлен. Менеджер снимет фишки с вашего ID, вы получите ' + rd.payout + ' USDT.', false);
+    wmsg('Request ' + (rd.op_id || '') + ' sent. A manager will take the chips from your ClubGG ID and you will get ' + rd.payout + ' USDT.', 'Заявка ' + (rd.op_id || '') + ' отправлена. Менеджер снимет фишки с вашего ID, вы получите ' + rd.payout + ' USDT.', false);
     $('wamt').value = ''; $('waddr').value = '';
   });
 
@@ -369,6 +370,7 @@
       if (mine) nMine++;
       var need = d.base_amount != null ? Number(d.base_amount) : Number(d.amount);
       var card = el('div', 'tcard' + (mine ? ' mine' : (!free ? ' taken' : '')));
+      card.appendChild(el('div', 'tkind', bi('Deposit', 'Депозит') + (d.op_id ? ' · <span class="opid">' + d.op_id + '</span>' : '')));
       var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', need + ' USDT')); top.appendChild(el('div', 'tnet', d.network)); card.appendChild(top);
       var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (d.gg_id ? fid(d.gg_id) : '—') + '</b>'));
       if (d.gg_id) idr.appendChild(copyChip(fid(d.gg_id)));
@@ -414,7 +416,7 @@
       if (free) nNew++;
       if (mine) nMine++;
       var card = el('div', 'tcard wd' + (mine ? ' mine' : (!free ? ' taken' : '')));
-      card.appendChild(el('div', 'tkind', bi('Cash out', 'Вывод')));
+      card.appendChild(el('div', 'tkind', bi('Cash out', 'Вывод') + (w.op_id ? ' · <span class="opid">' + w.op_id + '</span>' : '')));
       var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', Number(w.chips) + ' ' + t('chips', 'фишек'))); top.appendChild(el('div', 'tnet', w.network)); card.appendChild(top);
       card.appendChild(el('div', 'tmeta', bi('Player gets ', 'Игрок получит ') + '<b>' + Number(w.amount) + ' USDT</b>' + (Number(w.fee) ? ' · ' + bi('fee ', 'комиссия ') + Number(w.fee) : '')));
       var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (w.gg_id ? fid(w.gg_id) : '—') + '</b>'));
@@ -518,6 +520,7 @@
       row.appendChild(btn('', bi('Handled', 'Разобрано'), function () { adminCall({ action: 'resolve', id: x.id }).then(function () { loadAdmin(false); }); }));
       return row;
     }));
+    if (full) loadLog();
     if (staffRole === 'owner') {
       $('adm-owner').hidden = false;
       if (full) adminCall({ action: 'wallet' }).then(function (r) {
@@ -549,6 +552,35 @@
       }
     }
   }
+  var EV = {
+    created: ['Created', 'Создана'], snapshot: ['Recorded', 'Записана'], claimed: ['Taken by a manager', 'Взята менеджером'], released: ['Released', 'Отпущена'], updated: ['Updated', 'Изменена'],
+    'status:pending->approved': ['Chips taken', 'Фишки сняты'], 'status:approved->sending': ['Sending USDT', 'Отправка USDT'], 'status:sending->paid': ['Paid automatically', 'Выплачено автоматически'],
+    'status:approved->paid': ['Paid by hand', 'Выплачено вручную'], 'status:sending->approved': ['Auto payout failed', 'Автовыплата не прошла'], 'status:pending->rejected': ['Rejected', 'Отклонена'],
+    'status:received->chips_sent': ['Chips sent', 'Фишки отправлены']
+  };
+  async function loadLog() {
+    var box = $('adm-log'); if (!box) return;
+    var r = await adminCall({ action: 'log', q: $('adm-logq').value });
+    box.innerHTML = '';
+    if (!r.ok) { box.appendChild(el('div', 'note bad', bi('Could not load the log.', 'Не удалось загрузить журнал.'))); return; }
+    var items = r.data.items || [];
+    if (!items.length) { box.appendChild(el('div', 'tmeta', bi('Nothing found.', 'Ничего не найдено.'))); return; }
+    items.forEach(function (x) {
+      var ev = EV[x.event] || [x.event, x.event];
+      var row = el('div', 'logrow');
+      var head = el('div', 'loghead');
+      var l = el('div', '', ''); var nm = el('b', '', bi(ev[0], ev[1])); l.appendChild(nm);
+      var sub = el('small', '', ''); sub.textContent = x.op_id + (x.gg_id ? ' · ID ' + fid(x.gg_id) : '') + (x.actor_name ? ' · ' + x.actor_name : ''); l.appendChild(sub);
+      var rr = el('div', 'logr', ''); rr.innerHTML = '<b>' + (x.amount != null ? Number(x.amount) + ' USDT' : '') + '</b><small>' + new Date(x.at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '</small>';
+      head.appendChild(l); head.appendChild(rr); row.appendChild(head);
+      var det = el('pre', 'logdet', ''); det.hidden = true;
+      var d = x.row_data || {}, keep = ['op_id', 'status', 'network', 'chips', 'fee', 'amount', 'address', 'to_address', 'from_address', 'tx_hash', 'claimed_name', 'handled_name', 'note', 'created_at', 'handled_at'];
+      det.textContent = keep.filter(function (k) { return d[k] != null && d[k] !== ''; }).map(function (k) { return k + ': ' + d[k]; }).join('\n') + (x.changed ? '\n\n' + t('Before: ', 'Было: ') + Object.keys(x.changed).filter(function (k) { return k !== 'updated_at'; }).map(function (k) { return k + '=' + x.changed[k]; }).join(', ') : '');
+      row.appendChild(det);
+      head.addEventListener('click', function () { det.hidden = !det.hidden; });
+      box.appendChild(row);
+    });
+  }
   async function checkStaff() {
     try {
       var r = await adminCall({ action: 'whoami' });
@@ -560,6 +592,7 @@
       if (/[?&]tab=admin/.test(location.search)) showTab('admin');
     } catch (e) {}
   }
+  $('adm-logform').addEventListener('submit', function (e) { e.preventDefault(); loadLog(); });
   $('adm-add').addEventListener('submit', async function (e) {
     e.preventDefault();
     var uname = $('adm-user').value.trim(); if (!uname) return;

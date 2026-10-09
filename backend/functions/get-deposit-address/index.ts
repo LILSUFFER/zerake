@@ -67,7 +67,9 @@ Deno.serve(async (req: Request) => {
   try { network = (await req.json())?.network; } catch { return out({ error: "bad json" }, 400, h); }
   if (network !== "TRC20" && network !== "BEP20") return out({ error: "bad network" }, 400, h);
 
-  const xpub = Deno.env.get(network === "TRC20" ? "XPUB_TRON" : "XPUB_EVM");
+  // Take only the key itself, even if the saved value has extra text or line breaks around it.
+  const rawKey = Deno.env.get(network === "TRC20" ? "XPUB_TRON" : "XPUB_EVM") ?? "";
+  const xpub = rawKey.match(/xpub[1-9A-HJ-NP-Za-km-z]{100,}/)?.[0];
   if (!xpub) return out({ error: "not configured" }, 500, h);
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });

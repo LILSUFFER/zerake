@@ -398,7 +398,7 @@
       if (r.ok) { haptic('success'); $('chgaddr').value = ''; $('chgcode').value = ''; $('chgform').hidden = true; takeState(r.data); return; }
       var e = r.data.error;
       if (e === 'wrong code') bad('Wrong code. Attempts left today: ' + r.data.left + '.', 'Неверный код. Осталось попыток на сегодня: ' + r.data.left + '.');
-      else if (e === 'too many attempts') bad('Too many wrong codes. Try again tomorrow or write to support.', 'Слишком много неверных кодов. Попробуйте завтра или напишите в поддержку.');
+      else if (e === 'too many attempts') bad('Too many wrong codes. Try again tomorrow.', 'Слишком много неверных кодов. Попробуйте завтра.');
       else if (e === 'wallet taken') bad('This wallet is bound to another player.', 'Этот кошелёк привязан к другому игроку.');
       else if (e === 'change pending') bad('A change is already waiting.', 'Смена уже запрошена и ждёт.');
       else if (e === 'same address') bad('This is already your wallet.', 'Это и так ваш кошелёк.');
@@ -965,17 +965,6 @@
       if (/[?&]tab=admin/.test(location.search)) showTab('admin');
     } catch (e) {}
   }
-  $('adm-wc').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var m = $('adm-wc-msg'); m.hidden = true;
-    var gg = $('adm-wc-gg').value.replace(/\D/g, ''), ch = $('adm-wc-chain').value, a = $('adm-wc-addr').value.trim();
-    ask('File a wallet change for ID ' + fid(gg) + ' (' + ch + ')? It takes effect in 7 days, the player can cancel it.', 'Оформить смену кошелька для ID ' + fid(gg) + ' (' + ch + ')? Вступит в силу через 7 дней, игрок может отменить.', async function () {
-      var r = await adminCall({ action: 'wallet_change', gg_id: gg, chain: ch, address: a });
-      m.hidden = false;
-      if (r.ok) { m.className = 'note'; m.innerHTML = bi('Filed. Takes effect on ', 'Оформлено. Вступит в силу ') + new Date(r.data.effective_at).toLocaleString('ru-RU'); $('adm-wc-addr').value = ''; }
-      else { m.className = 'note bad'; m.textContent = r.data.error || 'error'; }
-    });
-  });
   $('adm-logform').addEventListener('submit', function (e) { e.preventDefault(); loadLog(); });
   $('adm-add').addEventListener('submit', async function (e) {
     e.preventDefault();

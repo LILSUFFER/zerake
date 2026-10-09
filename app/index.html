@@ -48,9 +48,9 @@
     <p class="payhint" id="pendtext"></p>
     <button class="btn ghost-red" id="pendcancel" type="button"><span class="en">Cancel the change</span><span class="ru">Отменить смену</span></button>
   </section>
-  <!-- no recovery code (after a change through support) -->
+  <!-- no recovery code yet -->
   <section id="nocode" class="card warnbox" hidden>
-    <b class="ctitle">🔑 <span class="en">Create a new recovery code</span><span class="ru">Создайте новый код восстановления</span></b>
+    <b class="ctitle">🔑 <span class="en">Create your recovery code</span><span class="ru">Создайте код восстановления</span></b>
     <p class="payhint"><span class="en">It lets you change your wallet in an emergency.</span><span class="ru">Он нужен, чтобы сменить кошелёк в экстренном случае.</span></p>
     <button class="btn" id="newcodebtn" type="button"><span class="en">Create code</span><span class="ru">Создать код</span></button>
   </section>
@@ -173,7 +173,7 @@
         <input id="chgcode" spellcheck="false" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" style="font-family:ui-monospace,Consolas,monospace;font-size:16px;letter-spacing:.08em">
         <p class="note" id="chgmsg" hidden></p>
         <button class="btn" type="button" id="chgbtn"><span class="en">Request the change (48 h)</span><span class="ru">Запросить смену (48 ч)</span></button>
-        <p class="hint"><span class="en">Lost the code? Write to support: the change is checked by hand and takes 7 days.</span><span class="ru">Потеряли код? Напишите в поддержку: смену проверят вручную, она займёт 7 дней.</span></p>
+        <p class="hint"><span class="en">Without the recovery code the wallet cannot be changed. Nobody, not even the club, can do it for you.</span><span class="ru">Без кода восстановления сменить кошелёк невозможно. Никто, даже клуб, не сможет сделать это за вас.</span></p>
       </div>
       <p class="hint" id="wcap" hidden></p>
       <p class="note bad" id="wnoaddr" hidden><span class="en">You have not bound a wallet on this network yet. It is bound with your first deposit on the Buy tab.</span><span class="ru">В этой сети у вас ещё нет привязанного кошелька. Он привязывается перед первым депозитом на вкладке «Купить».</span></p>
@@ -228,14 +228,6 @@
     <div class="card" id="adm-owner" hidden>
       <div class="label"><span class="en">Club wallet (auto payouts)</span><span class="ru">Кошелёк клуба (автовыплаты)</span></div>
       <div class="stack" id="adm-wallet"></div>
-      <div class="label"><span class="en">Wallet change through support (7 days)</span><span class="ru">Смена кошелька через поддержку (7 дней)</span></div>
-      <form class="stack" id="adm-wc" autocomplete="off">
-        <input id="adm-wc-gg" placeholder="ClubGG ID" inputmode="numeric">
-        <select id="adm-wc-chain" class="addrsel" style="font-family:inherit"><option value="TRON">Tron (TRC20)</option><option value="BSC">BNB Chain (BEP20)</option><option value="TON">TON (USDT-TON, GRAM)</option></select>
-        <input id="adm-wc-addr" placeholder="New wallet address" spellcheck="false" autocapitalize="off" style="font-family:ui-monospace,Consolas,monospace;font-size:14px">
-        <button class="btn" type="submit"><span class="en">File the change</span><span class="ru">Оформить смену</span></button>
-        <p class="note" id="adm-wc-msg" hidden></p>
-      </form>
       <div class="label"><span class="en">Managers</span><span class="ru">Менеджеры</span></div>
       <div class="stack" id="adm-staff"></div>
       <form class="addstaff" id="adm-add" autocomplete="off">
@@ -275,7 +267,7 @@
       <button class="btn" type="button" id="s-biobtn" hidden></button>
       <div class="srow"><span class="muted"><span class="en">Recovery code</span><span class="ru">Код восстановления</span></span><span id="s-code">—</span></div>
       <button class="btn" type="button" id="s-codebtn" hidden><span class="en">Create recovery code</span><span class="ru">Создать код восстановления</span></button>
-      <p class="hint"><span class="en">The recovery code lets you change a bound wallet in an emergency (takes effect in 48 hours). It is shown only once.</span><span class="ru">Код восстановления позволяет сменить привязанный кошелёк в экстренном случае (через 48 часов). Показывается только один раз.</span></p>
+      <p class="hint"><span class="en">The recovery code is the only way to change a bound wallet (takes effect in 48 hours). It is shown once and never changes. Lost it — the wallet cannot be changed.</span><span class="ru">Код восстановления — единственный способ сменить привязанный кошелёк (через 48 часов). Показывается один раз и не меняется. Потеряли — сменить кошелёк нельзя.</span></p>
     </div>
 
     <div class="card">
@@ -329,7 +321,7 @@
       <span class="sh"><span class="en">Tap to show</span><span class="ru">Нажмите, чтобы показать</span></span>
     </div>
     <div class="tbtns two" style="width:100%"><button class="btn primary" type="button" id="codecopy"><span class="en">Copy</span><span class="ru">Копировать</span></button><button class="btn" type="button" id="codeshow"><span class="en">Show</span><span class="ru">Показать</span></button></div>
-    <p class="payhint"><span class="en">Save it somewhere safe (write it down or keep a screenshot). We show it <b>only once</b>. With it you can change your wallet in an emergency. Without it, only through support in 7 days.</span><span class="ru">Сохраните его в надёжном месте (запишите или сделайте скриншот). Мы показываем его <b>только один раз</b>. С ним можно сменить кошелёк в экстренном случае. Без него — только через поддержку за 7 дней.</span></p>
+    <p class="payhint"><span class="en">Save it somewhere safe (write it down or keep a screenshot). We show it <b>only once</b> and it never changes. It is the only way to change your bound wallet. <b>If you lose it, the wallet cannot be changed by anyone.</b></span><span class="ru">Сохраните его в надёжном месте (запишите или сделайте скриншот). Мы показываем его <b>только один раз</b>, и он никогда не меняется. Это единственный способ сменить привязанный кошелёк. <b>Если потеряете код, сменить кошелёк не сможет никто.</b></span></p>
     <label class="chk"><input type="checkbox" id="codeok"> <span><span class="en">I have saved the code</span><span class="ru">Я сохранил код</span></span></label>
     <button class="btn primary" type="button" id="codedone" disabled><span class="en">Done</span><span class="ru">Готово</span></button>
   </div>
@@ -343,6 +335,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=32"></script>
+<script src="../assets/app.js?v=33"></script>
 </body>
 </html>

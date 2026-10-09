@@ -2,7 +2,7 @@
 //   status  -> bound wallets, a pending change (if any), whether a recovery code exists
 //   bind    -> bind the wallet for a chain (once). The very first bind returns a recovery code, shown once.
 //   change  -> recovery code + new address: the change takes effect after 48 hours (cash outs frozen meanwhile).
-//              Returns a NEW recovery code (shown once) that replaces the old one when the change is done.
+//              The recovery code itself never changes. Without it a wallet cannot be changed by anyone.
 //   cancel  -> cancel a pending change (no code needed: it only makes things safer)
 //   pin_set -> set / change the 6-digit app PIN;  pin_check -> unlock (5 wrong PINs lock it for 15 minutes)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -131,18 +131,17 @@ Deno.serve(async (req: Request) => {
       await admin.from("player_security").update({ failed: (recent ? sec.failed : 0) + 1, failed_at: new Date().toISOString() }).eq("user_id", uid);
       return out({ error: "wrong code", left: MAX_FAILED - ((recent ? sec.failed : 0) + 1) }, 403, h);
     }
-    const code = newCode();
     const effective = new Date(Date.now() + CHANGE_HOURS * 3600 * 1000).toISOString();
-    await admin.from("wallet_changes").insert({ user_id: uid, chain, old_address: cur.address, new_address: address, method: "code", new_code_hash: await hashCode(uid, code), requested_by: "player", effective_at: effective });
+    await admin.from("wallet_changes").insert({ user_id: uid, chain, old_address: cur.address, new_address: address, method: "code", requested_by: "player", effective_at: effective });
     await admin.from("player_security").update({ failed: 0 }).eq("user_id", uid);
     const gg = (await admin.from("profiles").select("gg_id").eq("user_id", uid).maybeSingle()).data?.gg_id ?? "";
     await tellAll(admin, uid,
       `🔐 <b>Запрошена смена кошелька</b> · <i>Wallet change requested</i>\n\nСеть: ${chain}\nБыло: <code>${cur.address}</code>\nСтанет: <code>${address}</code>\nВступит в силу: через ${CHANGE_HOURS} ч.\n\nДо этого выводы заморожены. <b>Если это не вы</b> — откройте приложение и нажмите «Отменить смену».`,
       `🔐 Wallet change requested (with recovery code)\nClubGG ID: ${gg}\nChain: ${chain}\nFrom: ${cur.address}\nTo: ${address}\nTakes effect in ${CHANGE_HOURS} h. Cash outs are frozen for this player meanwhile.`);
-    return out({ ...(await state()), code }, 200, h);
+    return out(await state(), 200, h);
   }
 
-  if (action === "newcode") {                      // after a change through support the old code is gone: make a new one
+  if (action === "newcode") {                      // only when the player has no code yet (it is created once and never changes)
     const sec = (await admin.from("player_security").select("code_hash").eq("user_id", uid).maybeSingle()).data;
     if (sec?.code_hash) return out({ error: "not allowed" }, 400, h);
     const code = newCode();

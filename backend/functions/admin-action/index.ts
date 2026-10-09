@@ -304,26 +304,6 @@ Deno.serve(async (req: Request) => {
     return out({ items: (rows ?? []).map((r) => ({ ...r, gg_id: gg.get(r.row_data?.user_id) ?? null })) }, 200, h);
   }
 
-  // ---- wallet change through support (the player lost the recovery code): owner only, 7 days ----
-  if (action === "wallet_change") {
-    if (role !== "owner") return out({ error: "owner only" }, 403, h);
-    const chain = String(body.chain ?? "");
-    const RE: Record<string, RegExp> = { TRON: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BSC: /^0x[0-9a-fA-F]{40}$/, TON: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/ };
-    const address = String(body.address ?? "").trim();
-    if (!RE[chain] || !RE[chain].test(address)) return out({ error: "bad address" }, 400, h);
-    const gg = String(body.gg_id ?? "").replace(/\D/g, "");
-    const prof = (await admin.from("profiles").select("user_id").eq("gg_id", gg)).data ?? [];
-    if (prof.length !== 1) return out({ error: prof.length ? "several players" : "player not found" }, 404, h);
-    const uid = prof[0].user_id;
-    const cur = (await admin.from("player_wallets").select("address").eq("user_id", uid).eq("chain", chain).maybeSingle()).data;
-    const pend = (await admin.from("wallet_changes").select("id").eq("user_id", uid).eq("status", "pending").limit(1)).data ?? [];
-    if (pend.length) return out({ error: "change pending" }, 409, h);
-    const effective = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-    await admin.from("wallet_changes").insert({ user_id: uid, chain, old_address: cur?.address ?? null, new_address: address, method: "support", requested_by: myName, effective_at: effective });
-    await tell(admin, uid, `🔐 <b>Смена кошелька через поддержку</b> · <i>Wallet change by support</i>\n\nСеть: ${esc(chain)}\nБыло: <code>${esc(cur?.address ?? "—")}</code>\nСтанет: <code>${esc(address)}</code>\nВступит в силу: через 7 дней.\n\nДо этого выводы заморожены. <b>Если вы об этом не просили</b> — откройте приложение и нажмите «Отменить смену».`);
-    return out({ ok: true, effective_at: effective }, 200, h);
-  }
-
   if (action === "unmatched") {
     const { data } = await admin.from("unmatched_deposits").select("id,network,tx_hash,address,from_address,amount,seen_at").eq("resolved", false).order("seen_at", { ascending: false }).limit(50);
     return out({ items: data ?? [] }, 200, h);

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=21">
+<link rel="stylesheet" href="../assets/app.css?v=22">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -117,6 +117,7 @@
       <p class="hint only-trc"><span class="en">The sender pays the network fee. From an exchange on TRC20 it is usually a few dollars.</span><span class="ru">Комиссию сети платит отправитель. С биржи в TRC20 это обычно несколько долларов.</span></p>
       <p class="hint only-bep"><span class="en">The sender pays the network fee. On BEP20 it is a few cents.</span><span class="ru">Комиссию сети платит отправитель. В BEP20 это несколько центов.</span></p>
       <p class="hint only-ton"><span class="en">The sender pays the network fee, a fraction of a cent. Keep a little TON in the wallet.</span><span class="ru">Комиссию сети платит отправитель, доли цента. Держите немного TON на кошельке.</span></p>
+      <p class="hint"><span class="en">Deposit from your own wallet, not from an exchange: cash outs are paid back to the wallet you deposited from.</span><span class="ru">Пополняйте со своего кошелька, а не с биржи: вывод приходит на тот кошелёк, с которого было пополнение.</span></p>
       <p class="hint warnx"><span>⚠</span><span><span class="en">Only USDT, only on the selected network. Other coins or networks mean the funds are lost.</span><span class="ru">Только USDT и только в выбранной сети. Другие монеты или сети приведут к потере средств.</span></span></p>
     </div>
   </section>
@@ -131,8 +132,9 @@
       <label for="wamt"><span class="en">Chips to cash out</span><span class="ru">Сколько фишек вывести</span></label>
       <div class="money"><input id="wamt" inputmode="decimal" placeholder="50"><span class="cur">$</span></div>
 
-      <label for="waddr"><span class="en">Your <span class="netname">TRC20</span> wallet address</span><span class="ru">Адрес вашего кошелька <span class="netname">TRC20</span></span></label>
-      <input id="waddr" placeholder="T..." spellcheck="false" autocapitalize="off" style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
+      <label for="waddr"><span class="en">Wallet you deposited from</span><span class="ru">Кошелёк, с которого вы пополняли</span></label>
+      <select id="waddr" class="addrsel"></select>
+      <p class="note bad" id="wnoaddr" hidden><span class="en">Cash outs go only to the wallet you deposited from. You have no deposits on <b class="netname">TRC20</b> yet: make a deposit from your wallet first.</span><span class="ru">Вывод возможен только на кошелёк, с которого вы пополняли. В сети <b class="netname">TRC20</b> у вас ещё нет депозитов: сначала пополните со своего кошелька.</span></p>
 
       <div class="fieldrow"><span class="muted"><span class="en">Chips are taken from ClubGG ID</span><span class="ru">Фишки спишутся с ID в ClubGG</span></span><span class="pill g" id="wd-id">—</span></div>
       <div class="summary" id="wfee"></div>
@@ -141,7 +143,7 @@
     </form>
 
     <ol class="steps">
-      <li><span><span class="en">Enter the amount and your wallet address. Nothing to do in ClubGG.</span><span class="ru">Укажите сумму и адрес кошелька. В ClubGG ничего делать не нужно.</span></span></li>
+      <li><span><span class="en">Enter the amount and choose the wallet you deposited from. For your safety we pay only to it.</span><span class="ru">Укажите сумму и выберите кошелёк, с которого пополняли. Ради безопасности платим только на него.</span></span></li>
       <li><span><span class="en">A manager takes the chips from your ClubGG ID.</span><span class="ru">Менеджер снимет фишки с вашего ID в ClubGG.</span></span></li>
       <li><span><span class="en">USDT is sent to your wallet automatically. Minimum <b class="minwd">10</b> USDT.</span><span class="ru">USDT автоматически придут на ваш кошелёк. Минимум <b class="minwd">10</b> USDT.</span></span></li>
     </ol>
@@ -214,6 +216,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=21"></script>
+<script src="../assets/app.js?v=22"></script>
 </body>
 </html>

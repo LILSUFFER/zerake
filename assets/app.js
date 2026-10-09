@@ -114,8 +114,7 @@
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = chain; });
     document.querySelectorAll('.coinname').forEach(function (e) { e.textContent = coin; });
     $('req-net').textContent = coin + ' · ' + chain;
-    $('waddr').placeholder = PLACEHOLDER[net];
-    $('waddr').value = '';
+    loadWdAddrs();
     $('wmsg').hidden = true;
     feePreview();
   }
@@ -166,6 +165,35 @@
   function wmsg(en, ru, bad) {
     var m = $('wmsg'); m.innerHTML = bi(en, ru); m.className = 'note' + (bad ? ' bad' : ''); m.hidden = false;
   }
+  /* TON raw address (0:HEX) -> friendly non-bounceable UQ… form */
+  function tonFriendly(raw) {
+    var m = String(raw).match(/^(-?\d+):([0-9a-fA-F]{64})$/); if (!m) return raw;
+    var b = [0x51, (Number(m[1]) + 256) % 256]; for (var i = 0; i < 64; i += 2) b.push(parseInt(m[2].substr(i, 2), 16));
+    var crc = 0; b.forEach(function (x) { crc ^= x << 8; for (var k = 0; k < 8; k++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff; });
+    b.push(crc >> 8, crc & 255);
+    return btoa(String.fromCharCode.apply(null, b)).replace(/\+/g, '-').replace(/\//g, '_');
+  }
+  var wdAddrs = {};
+  async function loadWdAddrs() {
+    var n = net, sel = $('waddr');
+    var chains = n === 'TON' || n === 'GRAM' ? ['TON', 'GRAM'] : [n];
+    if (!wdAddrs[n] && me) {
+      var r = await sb.from('deposits').select('from_address,created_at').eq('user_id', me.id).in('network', chains).order('created_at', { ascending: false }).limit(50);
+      var seen = {}, list = [];
+      (r.data || []).forEach(function (d) {
+        var a = d.from_address; if (!a) return;
+        if (chains[0] === 'TON') a = tonFriendly(a);
+        var k = n === 'BEP20' ? a.toLowerCase() : a; if (seen[k]) return; seen[k] = 1; list.push(a);
+      });
+      wdAddrs[n] = list;
+    }
+    if (n !== net) return;
+    var list = wdAddrs[n] || [];
+    sel.innerHTML = '';
+    list.forEach(function (a) { var o = document.createElement('option'); o.value = a; o.textContent = a.length > 24 ? a.slice(0, 10) + '…' + a.slice(-8) : a; sel.appendChild(o); });
+    sel.hidden = !list.length; $('wnoaddr').hidden = !!list.length;
+    $('wsubmit').disabled = !list.length || !ggId;
+  }
   function feePreview() {
     var box = $('wfee'); if (!box) return;
     var chips = Number(String($('wamt').value).replace(',', '.'));
@@ -200,6 +228,7 @@
       else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
       else if (rd.error === 'below fee') wmsg('The amount is too small to cover the fee (' + rd.fee + ' USDT).', 'Сумма слишком мала, чтобы покрыть комиссию (' + rd.fee + ' USDT).', true);
       else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
+      else if (rd.error === 'address not allowed') wmsg('Cash outs go only to a wallet you deposited from.', 'Вывод возможен только на кошелёк, с которого вы пополняли.', true);
       else if (rd.error === 'no clubgg id') wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true);
       else if (rd.error === 'bad amount') wmsg('Enter the amount with at most 2 decimals, for example 50 or 50.25.', 'Введите сумму не более чем с 2 знаками после точки, например 50 или 50.25.', true);
       else if (rd.error === 'above maximum') wmsg('Maximum withdrawal is ' + rd.max + ' USDT.', 'Максимальный вывод: ' + rd.max + ' USDT.', true);
@@ -211,7 +240,7 @@
     haptic('success');
     var got = rd.coin_amount ? Number(rd.coin_amount) + ' GRAM' : rd.payout + ' USDT';
     wmsg('Request ' + (rd.op_id || '') + ' sent. A manager will take the chips from your ClubGG ID and you will get ' + got + '.', 'Заявка ' + (rd.op_id || '') + ' отправлена. Менеджер снимет фишки с вашего ID, вы получите ' + got + '.', false);
-    $('wamt').value = ''; $('waddr').value = '';
+    $('wamt').value = '';
   });
 
   /* ---------- TRC20 deposit request ---------- */
@@ -644,7 +673,7 @@
     var u = tg.initDataUnsafe && tg.initDataUnsafe.user;
     var nm = u ? (u.username ? '@' + u.username : (u.first_name || '')) : '';
     if (nm) { var w = $('who'); w.innerHTML = '<span class="ava"></span><span class="nm"></span>'; w.firstChild.textContent = (u.first_name || u.username || '?').charAt(0).toUpperCase(); w.lastChild.textContent = nm; }
-    return Promise.all([loadProfile(), loadAddress()]);
+    return Promise.all([loadProfile(), loadAddress()]).then(loadWdAddrs);
   }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;
     var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];

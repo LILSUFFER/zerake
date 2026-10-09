@@ -25,6 +25,23 @@ function calcFee(chips: string, fixed: number, pct: number): string {
   const cents = Math.ceil(Math.round((fixed + Number(chips) * pct / 100) * 1e6) / 1e4);
   return (cents / 100).toFixed(2);
 }
+/** TON address (friendly UQ/EQ… or raw 0:…) -> raw "0:HEX". */
+function tonToRaw(addr: string): string {
+  const a = addr.trim();
+  const m = a.match(/^(-?\d+):([0-9a-fA-F]{64})$/);
+  if (m) return `${m[1]}:${m[2].toUpperCase()}`;
+  const bin = atob(a.replace(/-/g, "+").replace(/_/g, "/"));
+  if (bin.length !== 36) throw new Error("bad TON address");
+  const b = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const wc = b[1] > 127 ? b[1] - 256 : b[1];
+  return `${wc}:${Array.from(b.slice(2, 34), (x) => x.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+/** One comparable form per network. */
+function normAddr(network: string, a: string): string {
+  if (network === "BEP20") return a.trim().toLowerCase();
+  if (network === "TON" || network === "GRAM") { try { return tonToRaw(a); } catch { return a.trim(); } }
+  return a.trim();
+}
 function checkAddress(network: string, address: string): boolean {
   return !!ADDRESS[network] && ADDRESS[network].test(address);
 }
@@ -93,6 +110,12 @@ Deno.serve(async (req: Request) => {
 
   const profile = (await admin.from("profiles").select("gg_id").eq("user_id", u.user.id).maybeSingle()).data;
   if (!profile?.gg_id) return out({ error: "no clubgg id" }, 400, h);
+
+  // Cash outs go only back to a wallet the player has deposited from, on the same chain (TON and GRAM share wallets).
+  const chains = network === "TON" || network === "GRAM" ? ["TON", "GRAM"] : [network];
+  const from = (await admin.from("deposits").select("from_address").eq("user_id", u.user.id).in("network", chains)).data ?? [];
+  const allowed = new Set(from.map((d) => normAddr(network, String(d.from_address ?? ""))).filter(Boolean));
+  if (!allowed.has(normAddr(network, address))) return out({ error: "address not allowed" }, 400, h);
 
   // A player cannot pile up requests: at most 3 waiting at once.
   const pending = await admin.from("withdrawals").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).eq("status", "pending");

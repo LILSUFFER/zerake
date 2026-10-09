@@ -18,6 +18,11 @@ function parseAmount(input: unknown): string | null {
   const [i, f = ""] = s.split(".");
   return `${BigInt(i)}.${f.padEnd(2, "0")}0000`;
 }
+/** Fee in USDT, rounded up to the cent: fixed part + percent of the cash out. */
+function calcFee(chips: string, fixed: number, pct: number): string {
+  const cents = Math.ceil(Math.round((fixed + Number(chips) * pct / 100) * 1e6) / 1e4);
+  return (cents / 100).toFixed(2);
+}
 function checkAddress(network: string, address: string): boolean {
   return !!ADDRESS[network] && ADDRESS[network].test(address);
 }
@@ -60,7 +65,7 @@ Deno.serve(async (req: Request) => {
   if (!amount) return out({ error: "bad amount" }, 400, h);
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-  const cfg = (await admin.from("chain_config").select("enabled,min_withdraw,max_withdraw,explorer_tx").eq("network", network).maybeSingle()).data;
+  const cfg = (await admin.from("chain_config").select("enabled,min_withdraw,max_withdraw,explorer_tx,wd_fee_fixed,wd_fee_pct").eq("network", network).maybeSingle()).data;
   if (!cfg || !cfg.enabled) return out({ error: "network disabled" }, 503, h);
   if (Number(amount) < Number(cfg.min_withdraw)) return out({ error: "below minimum", min: cfg.min_withdraw }, 400, h);
   if (Number(amount) > Number(cfg.max_withdraw)) return out({ error: "above maximum", max: cfg.max_withdraw }, 400, h);
@@ -72,14 +77,18 @@ Deno.serve(async (req: Request) => {
   const pending = await admin.from("withdrawals").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).eq("status", "pending");
   if ((pending.count ?? 0) >= 3) return out({ error: "too many pending" }, 429, h);
 
-  const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, amount }).select("id").single();
+  // The player cashes out "amount" in chips; the network fee is kept and the rest is sent.
+  const fee = calcFee(amount, Number(cfg.wd_fee_fixed ?? 0), Number(cfg.wd_fee_pct ?? 0));
+  const net = (Math.round(Number(amount) * 100) - Math.round(Number(fee) * 100)) / 100;
+  if (net < 1) return out({ error: "below fee", fee }, 400, h);
+  const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2) }).select("id").single();
   if (ins.error) { console.error("withdrawal insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
 
   // Alert every manager (the queue button opens the Mini App on the managers' tab).
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (botToken) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
-    const text = `💸 Cash out: ${Number(amount)} USDT (${network})\nClubGG ID: ${profile.gg_id}\nTo: ${address}\nTake it, remove the chips from this ID in ClubGG, then pay.`;
+    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nClubGG ID: ${profile.gg_id}\nPayout: ${net} USDT (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
     for (const s of staff ?? []) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -88,5 +97,5 @@ Deno.serve(async (req: Request) => {
       }).catch(() => {});
     }
   }
-  return out({ ok: true, id: ins.data.id }, 200, h);
+  return out({ ok: true, id: ins.data.id, fee: Number(fee), payout: net }, 200, h);
 });

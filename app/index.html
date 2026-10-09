@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=13">
+<link rel="stylesheet" href="../assets/app.css?v=14">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -113,6 +113,7 @@
       <label for="waddr"><span class="en"><span class="netname">TRC20</span> address</span><span class="ru">Адрес <span class="netname">TRC20</span></span></label>
       <input id="waddr" placeholder="T..." spellcheck="false" autocapitalize="off">
 
+      <p class="hint" id="wfee"></p>
       <p class="note" id="wmsg" hidden></p>
       <button class="btn primary" type="submit" id="wsubmit"><span class="en">Request withdrawal</span><span class="ru">Запросить вывод</span></button>
     </form>
@@ -120,8 +121,8 @@
     <ol class="steps">
       <li><span class="en">Enter the amount and your wallet address, then send the request. You do not need to do anything in ClubGG.</span><span class="ru">Укажите сумму и адрес кошелька и отправьте запрос. В ClubGG ничего делать не нужно.</span></li>
       <li><span class="en">A manager takes the chips from your ClubGG ID and sends you the USDT.</span><span class="ru">Менеджер снимет фишки с вашего ID в ClubGG и отправит вам USDT.</span></li>
-      <li class="only-trc"><span class="en">The network fee is taken from the payout. On TRC20 it is usually a few dollars.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети TRC20 она обычно составляет несколько долларов.</span></li>
-      <li class="only-bep"><span class="en">The network fee is taken from the payout. On BEP20 it is usually a few cents.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети BEP20 она обычно составляет несколько центов.</span></li>
+      <li class="only-trc"><span class="en">Cash outs on TRC20 have a fee of 3 USDT + 1%. On BEP20 there is no fee.</span><span class="ru">Вывод в сети TRC20 с комиссией 3 USDT + 1%. В сети BEP20 без комиссии.</span></li>
+      <li class="only-bep"><span class="en">No fee on BEP20: you get the full amount.</span><span class="ru">В сети BEP20 без комиссии: вы получите всю сумму.</span></li>
       <li class="only-ton"><span class="en">The network fee is taken from the payout. On TON it is a fraction of a cent.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети TON это доли цента.</span></li>
       <li><span class="en">Minimum withdrawal: <b class="minwd">10</b> USDT.</span><span class="ru">Минимальный вывод: <b class="minwd">10</b> USDT.</span></li>
     </ol>
@@ -180,6 +181,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=13"></script>
+<script src="../assets/app.js?v=14"></script>
 </body>
 </html>

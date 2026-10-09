@@ -10,6 +10,8 @@
     BEP20: ['Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).'],
     TON: ['Enter a valid TON address (starts with UQ or EQ).', 'Введите корректный адрес TON (начинается с UQ или EQ).']
   };
+  var WD_FEE = { TRC20: [3, 1], BEP20: [0, 0], TON: [0, 0] };   // fixed USDT, percent (the server decides; this is a preview)
+  function wdFee(n, chips) { var f = WD_FEE[n] || [0, 0]; return Math.ceil(Math.round((f[0] + chips * f[1] / 100) * 1e6) / 1e4) / 100; }
   var net = 'TRC20';
   var tg = window.Telegram && window.Telegram.WebApp;
   var $ = function (id) { return document.getElementById(id); };
@@ -112,6 +114,7 @@
     $('waddr').placeholder = PLACEHOLDER[net];
     $('waddr').value = '';
     $('wmsg').hidden = true;
+    feePreview();
   }
   document.querySelectorAll('#nets button').forEach(function (b) {
     b.addEventListener('click', function () { net = b.dataset.net; applyNet(); loadAddress(); });
@@ -120,7 +123,7 @@
   var rows = [];
   async function loadHistory() {
     var d = await sb.from('deposits').select('id,amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
-    var w = await sb.from('withdrawals').select('id,amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
+    var w = await sb.from('withdrawals').select('id,amount,chips,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(30);
     rows = []
       .concat((d.data || []).map(function (x) { x.kind = 'dep'; return x; }))
       .concat((w.data || []).map(function (x) { x.kind = 'wd'; return x; }))
@@ -142,7 +145,7 @@
       var date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (x.network || 'TRC20');
       left.appendChild(title); left.appendChild(date);
       var right = document.createElement('div');
-      var amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = (x.kind === 'dep' ? '+' : '−') + Number(x.amount) + ' USDT';
+      var amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = (x.kind === 'dep' ? '+' : '−') + Number(x.kind === 'wd' && x.chips != null ? x.chips : x.amount) + (x.kind === 'wd' && x.chips != null && Number(x.chips) !== Number(x.amount) ? ' → ' + Number(x.amount) + ' USDT' : ' USDT');
       var st = document.createElement('div'); st.className = 'st' + (x.status === 'chips_sent' || x.status === 'paid' ? ' ok' : '');
       var lb = LABEL[x.status] || [x.status, x.status]; st.innerHTML = bi(lb[0], lb[1]);
       right.appendChild(amt); right.appendChild(st);
@@ -156,6 +159,17 @@
   function wmsg(en, ru, bad) {
     var m = $('wmsg'); m.innerHTML = bi(en, ru); m.className = 'note' + (bad ? ' bad' : ''); m.hidden = false;
   }
+  function feePreview() {
+    var box = $('wfee'); if (!box) return;
+    var chips = Number(String($('wamt').value).replace(',', '.'));
+    var f = WD_FEE[net] || [0, 0];
+    if (!f[0] && !f[1]) { box.innerHTML = bi('No fee on this network.', 'В этой сети без комиссии.'); return; }
+    var rule = (f[0] ? f[0] + ' USDT' : '') + (f[0] && f[1] ? ' + ' : '') + (f[1] ? f[1] + '%' : '');
+    if (!(chips > 0)) { box.innerHTML = bi('Network fee: ' + rule + '.', 'Комиссия сети: ' + rule + '.'); return; }
+    var fee = wdFee(net, chips), get = Math.max(0, Math.round((chips - fee) * 100) / 100);
+    box.innerHTML = bi('Fee ' + fee + ' USDT (' + rule + '). You get <b>' + get + ' USDT</b>.', 'Комиссия ' + fee + ' USDT (' + rule + '). Вы получите <b>' + get + ' USDT</b>.');
+  }
+  $('wamt').addEventListener('input', feePreview);
   $('wform').addEventListener('submit', async function (e) {
     e.preventDefault();
     var amount = Number(String($('wamt').value).replace(',', '.'));
@@ -176,6 +190,7 @@
       haptic('error');
       if (rd.error === 'below minimum') wmsg('Minimum withdrawal is ' + rd.min + ' USDT.', 'Минимальный вывод: ' + rd.min + ' USDT.', true);
       else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
+      else if (rd.error === 'below fee') wmsg('The amount is too small to cover the fee (' + rd.fee + ' USDT).', 'Сумма слишком мала, чтобы покрыть комиссию (' + rd.fee + ' USDT).', true);
       else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
       else if (rd.error === 'no clubgg id') wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true);
       else if (rd.error === 'bad amount') wmsg('Enter the amount with at most 2 decimals, for example 50 or 50.25.', 'Введите сумму не более чем с 2 знаками после точки, например 50 или 50.25.', true);
@@ -185,7 +200,7 @@
       return;
     }
     haptic('success');
-    wmsg('Request sent. A manager will take the chips from your ClubGG ID and pay you.', 'Запрос отправлен. Менеджер снимет фишки с вашего ID и выплатит вам USDT.', false);
+    wmsg('Request sent. A manager will take the chips from your ClubGG ID and you will get ' + rd.payout + ' USDT.', 'Запрос отправлен. Менеджер снимет фишки с вашего ID, вы получите ' + rd.payout + ' USDT.', false);
     $('wamt').value = ''; $('waddr').value = '';
   });
 
@@ -392,7 +407,8 @@
       if (mine) nMine++;
       var card = el('div', 'tcard wd' + (mine ? ' mine' : (!free ? ' taken' : '')));
       card.appendChild(el('div', 'tkind', bi('Cash out', 'Вывод')));
-      var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', Number(w.amount) + ' USDT')); top.appendChild(el('div', 'tnet', w.network)); card.appendChild(top);
+      var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', Number(w.chips) + ' ' + t('chips', 'фишек'))); top.appendChild(el('div', 'tnet', w.network)); card.appendChild(top);
+      card.appendChild(el('div', 'tmeta', bi('Player gets ', 'Игрок получит ') + '<b>' + Number(w.amount) + ' USDT</b>' + (Number(w.fee) ? ' · ' + bi('fee ', 'комиссия ') + Number(w.fee) : '')));
       var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (w.gg_id ? fid(w.gg_id) : '—') + '</b>'));
       if (w.gg_id) idr.appendChild(copyChip(fid(w.gg_id)));
       card.appendChild(idr);
@@ -432,7 +448,7 @@
   }
   function takenForm(card, w) {
     var f = el('div', 'stack');
-    f.appendChild(el('div', 'note', bi('Type the amount you took from the player. It must match the request exactly.', 'Введите сумму, которую вы сняли с игрока. Она должна точно совпасть с заявкой.')));
+    f.appendChild(el('div', 'note', bi('Type how many chips you took from the player. It must match the request exactly.', 'Введите, сколько фишек вы сняли с игрока. Должно точно совпасть с заявкой.')));
     var inp = el('input', 'txin'); inp.inputMode = 'decimal'; inp.placeholder = t('Amount taken, USDT', 'Снятая сумма, USDT');
     f.appendChild(inp);
     f.appendChild(btn('primary', bi('Confirm', 'Подтвердить'), function (b) {
@@ -444,7 +460,7 @@
           loadAdmin(false); return;
         }
         haptic('error'); b.disabled = false;
-        try { tg.showAlert(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.amount) + ' USDT).', 'Сумма не совпадает с заявкой (' + Number(w.amount) + ' USDT).') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
+        try { tg.showAlert(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.chips) + ').', 'Сумма не совпадает с заявкой (' + Number(w.chips) + ').') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
       });
     }));
     card.appendChild(f);
@@ -481,7 +497,7 @@
     }));
     var wd = await adminCall({ action: 'wdone' });
     if (wd.ok) renderMini('adm-wdone', 'adm-wdone-card', (wd.data.items || []).map(function (x) {
-      return el('div', 'mini', '<span>' + (x.gg_id ? fid(x.gg_id) : '—') + ' · ' + Number(x.amount) + ' USDT · ' + x.network + (x.status === 'rejected' ? ' · ' + t('rejected', 'отклонён') : '') + '</span><span><b>' + (x.handled_name || '') + '</b> · ' + ago(x.handled_at) + '</span>');
+      return el('div', 'mini', '<span>' + (x.gg_id ? fid(x.gg_id) : '—') + ' · ' + Number(x.chips) + ' → ' + Number(x.amount) + ' USDT · ' + x.network + (x.status === 'rejected' ? ' · ' + t('rejected', 'отклонён') : '') + '</span><span><b>' + (x.handled_name || '') + '</b> · ' + ago(x.handled_at) + '</span>');
     }));
     var u = await adminCall({ action: 'unmatched' });
     if (u.ok) renderMini('adm-unm', 'adm-unm-card', (u.data.items || []).map(function (x) {

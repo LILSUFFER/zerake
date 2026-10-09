@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
   // ---- cash-out requests ----
   if (action === "wqueue" || action === "wdone") {
     const pending = action === "wqueue";
-    const q = admin.from("withdrawals").select("id,amount,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
+    const q = admin.from("withdrawals").select("id,amount,chips,fee,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
     const { data: ws } = pending
       ? await q.in("status", ["pending", "approved", "sending"]).order("created_at", { ascending: true }).limit(100)
       : await q.in("status", ["paid", "rejected"]).order("handled_at", { ascending: false }).limit(15);
@@ -154,7 +154,7 @@ Deno.serve(async (req: Request) => {
     const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
     return out({
       items: rows.map((w) => ({
-        id: w.id, amount: w.amount, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
+        id: w.id, amount: w.amount, chips: w.chips ?? w.amount, fee: w.fee ?? 0, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
         handled_at: w.handled_at, handled_name: w.handled_name, claimed_name: w.claimed_name, mine: w.claimed_by === u.user.id,
         gg_id: gg.get(w.user_id) ?? null, tx_hash: w.tx_hash, note: w.note,
       })),
@@ -181,10 +181,10 @@ Deno.serve(async (req: Request) => {
     const id = Number(body.id);
     const typed = Number(String(body.amount ?? "").replace(",", "."));
     if (!Number.isInteger(id) || !Number.isFinite(typed)) return out({ error: "bad request" }, 400, h);
-    const w0 = (await admin.from("withdrawals").select("amount,status,claimed_by").eq("id", id).maybeSingle()).data;
+    const w0 = (await admin.from("withdrawals").select("amount,chips,status,claimed_by").eq("id", id).maybeSingle()).data;
     if (!w0 || w0.status !== "pending") return out({ error: "taken or already handled" }, 409, h);
     if (role !== "owner" && w0.claimed_by !== u.user.id) return out({ error: "taken or already handled" }, 409, h);
-    if (Math.round(typed * 100) !== Math.round(Number(w0.amount) * 100)) return out({ error: "amount mismatch" }, 400, h);
+    if (Math.round(typed * 100) !== Math.round(Number(w0.chips ?? w0.amount) * 100)) return out({ error: "amount mismatch" }, 400, h);
     const r = await admin.from("withdrawals").update({ status: "approved", handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString() })
       .eq("id", id).eq("status", "pending").select("user_id,amount,network");
     if (r.error || (r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);

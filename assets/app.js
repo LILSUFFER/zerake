@@ -8,9 +8,10 @@
   var ADDR_HINT = {
     TRC20: ['Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).'],
     BEP20: ['Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).'],
-    TON: ['Enter a valid TON address (starts with UQ or EQ).', 'Введите корректный адрес TON (начинается с UQ или EQ).']
+    TON: ['Enter a valid TON address (starts with UQ or EQ).', 'Введите корректный адрес TON (начинается с UQ или EQ).'],
+    GRAM: ['Enter a valid TON address (starts with UQ or EQ).', 'Введите корректный адрес TON (начинается с UQ или EQ).']
   };
-  var WD_FEE = { TRC20: [3, 1], BEP20: [0, 0], TON: [0, 0] };   // fixed USDT, percent (the server decides; this is a preview)
+  var WD_FEE = { TRC20: [3, 1], BEP20: [0, 0], TON: [0, 0], GRAM: [0, 0] };   // fixed USDT, percent (the server decides; this is a preview)
   function wdFee(n, chips) { var f = WD_FEE[n] || [0, 0]; return Math.ceil(Math.round((f[0] + chips * f[1] / 100) * 1e6) / 1e4) / 100; }
   var net = 'TRC20';
   var tg = window.Telegram && window.Telegram.WebApp;
@@ -109,8 +110,10 @@
   function applyNet() {
     document.body.dataset.net = net;
     document.querySelectorAll('#nets button').forEach(function (b) { b.classList.toggle('on', b.dataset.net === net); });
-    document.querySelectorAll('.netname').forEach(function (e) { e.textContent = net; });
-    $('req-net').textContent = 'USDT · ' + net;
+    var coin = net === 'GRAM' ? 'GRAM' : 'USDT', chain = net === 'GRAM' ? 'TON' : net;
+    document.querySelectorAll('.netname').forEach(function (e) { e.textContent = chain; });
+    document.querySelectorAll('.coinname').forEach(function (e) { e.textContent = coin; });
+    $('req-net').textContent = coin + ' · ' + chain;
     $('waddr').placeholder = PLACEHOLDER[net];
     $('waddr').value = '';
     $('wmsg').hidden = true;
@@ -201,11 +204,13 @@
       else if (rd.error === 'bad amount') wmsg('Enter the amount with at most 2 decimals, for example 50 or 50.25.', 'Введите сумму не более чем с 2 знаками после точки, например 50 или 50.25.', true);
       else if (rd.error === 'above maximum') wmsg('Maximum withdrawal is ' + rd.max + ' USDT.', 'Максимальный вывод: ' + rd.max + ' USDT.', true);
       else if (rd.error === 'network disabled') wmsg('This network is not available yet.', 'Эта сеть пока недоступна.', true);
+      else if (rd.error === 'no price, try again') wmsg('Could not get the GRAM rate. Try again in a moment.', 'Не удалось получить курс GRAM. Попробуйте через минуту.', true);
       else wmsg('Could not send the request (' + (rd.error || res.status) + '). Please try again.', 'Не удалось отправить запрос (' + (rd.error || res.status) + '). Попробуйте ещё раз.', true);
       return;
     }
     haptic('success');
-    wmsg('Request ' + (rd.op_id || '') + ' sent. A manager will take the chips from your ClubGG ID and you will get ' + rd.payout + ' USDT.', 'Заявка ' + (rd.op_id || '') + ' отправлена. Менеджер снимет фишки с вашего ID, вы получите ' + rd.payout + ' USDT.', false);
+    var got = rd.coin_amount ? Number(rd.coin_amount) + ' GRAM' : rd.payout + ' USDT';
+    wmsg('Request ' + (rd.op_id || '') + ' sent. A manager will take the chips from your ClubGG ID and you will get ' + got + '.', 'Заявка ' + (rd.op_id || '') + ' отправлена. Менеджер снимет фишки с вашего ID, вы получите ' + got + '.', false);
     $('wamt').value = ''; $('waddr').value = '';
   });
 
@@ -269,7 +274,9 @@
     $('req-view').classList.remove('paid');
     setState('open');
     $('reqform').hidden = true; $('req-view').hidden = false;
-    $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.amount;
+    $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.network === 'GRAM' ? String(Number(r.amount)) : r.amount;
+    if ($('rv-no2')) $('rv-no2').textContent = r.request_no;
+    if (r.network === 'GRAM') { $('rv-chips').textContent = '$' + Number(r.base_amount); $('rv-rate').textContent = r.rate ? '1 GRAM = $' + Number(r.rate).toFixed(3) : '—'; }
     renderQr(r.address); setReqStatus('wait');
     var end = new Date(r.expires_at).getTime();
     function paint() {
@@ -308,7 +315,7 @@
     try { await fetchOpen(n); } catch (e) { return; }
     renderOpen(n);
   }
-  function prefetchNets() { ['TRC20', 'BEP20', 'TON'].forEach(function (n) { if (n !== net) fetchOpen(n).catch(function () {}); }); }
+  function prefetchNets() { ['TRC20', 'BEP20', 'TON', 'GRAM'].forEach(function (n) { if (n !== net) fetchOpen(n).catch(function () {}); }); }
   document.querySelectorAll('[data-quick]').forEach(function (b) {
     b.addEventListener('click', function () { $('reqamt').value = b.dataset.quick; try { tg.HapticFeedback.selectionChanged(); } catch (e) {} });
   });
@@ -443,7 +450,7 @@
       var card = el('div', 'tcard wd' + (mine ? ' mine' : (!free ? ' taken' : '')));
       card.appendChild(el('div', 'tkind', bi('Cash out', 'Вывод') + (w.op_id ? ' · <span class="opid">' + w.op_id + '</span>' : '')));
       var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', Number(w.chips) + ' ' + t('chips', 'фишек'))); top.appendChild(el('div', 'tnet', w.network)); card.appendChild(top);
-      card.appendChild(el('div', 'tmeta', bi('Player gets ', 'Игрок получит ') + '<b>' + Number(w.amount) + ' USDT</b>' + (Number(w.fee) ? ' · ' + bi('fee ', 'комиссия ') + Number(w.fee) : '')));
+      card.appendChild(el('div', 'tmeta', bi('Player gets ', 'Игрок получит ') + '<b>' + (w.coin_amount ? Number(w.coin_amount) + ' GRAM' : Number(w.amount) + ' USDT') + '</b>' + (w.coin_amount ? ' (≈ $' + Number(w.amount) + ')' : '') + (Number(w.fee) ? ' · ' + bi('fee ', 'комиссия ') + Number(w.fee) : '')));
       var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (w.gg_id ? fid(w.gg_id) : '—') + '</b>'));
       if (w.gg_id) idr.appendChild(copyChip(fid(w.gg_id)));
       card.appendChild(idr);

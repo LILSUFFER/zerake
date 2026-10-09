@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
   // ---- cash-out requests ----
   if (action === "wqueue" || action === "wdone") {
     const pending = action === "wqueue";
-    const q = admin.from("withdrawals").select("id,op_id,amount,chips,fee,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note");
+    const q = admin.from("withdrawals").select("id,op_id,amount,chips,fee,network,address,status,created_at,user_id,claimed_name,claimed_by,handled_name,handled_at,tx_hash,note,coin_amount,rate");
     const { data: ws } = pending
       ? await q.in("status", ["pending", "approved", "sending"]).order("created_at", { ascending: true }).limit(100)
       : await q.in("status", ["paid", "rejected"]).order("handled_at", { ascending: false }).limit(15);
@@ -154,7 +154,7 @@ Deno.serve(async (req: Request) => {
     const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
     return out({
       items: rows.map((w) => ({
-        id: w.id, op_id: w.op_id, amount: w.amount, chips: w.chips ?? w.amount, fee: w.fee ?? 0, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
+        id: w.id, op_id: w.op_id, amount: w.amount, chips: w.chips ?? w.amount, coin_amount: w.coin_amount, rate: w.rate, fee: w.fee ?? 0, network: w.network, address: w.address, status: w.status, created_at: w.created_at,
         handled_at: w.handled_at, handled_name: w.handled_name, claimed_name: w.claimed_name, mine: w.claimed_by === u.user.id,
         gg_id: gg.get(w.user_id) ?? null, tx_hash: w.tx_hash, note: w.note,
       })),

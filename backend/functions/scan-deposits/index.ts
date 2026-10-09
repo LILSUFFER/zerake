@@ -50,11 +50,11 @@ function b64ToHex(b64: string): string {
 /** One comparable form per network (case rules differ). */
 function normAddr(network: string, a: string): string {
   if (network === "BEP20") return a.toLowerCase();
-  if (network === "TON") { try { return tonToRaw(a); } catch { return a; } }
+  if (network === "TON" || network === "GRAM") { try { return tonToRaw(a); } catch { return a; } }
   return a;
 }
 interface Found { tx_hash: string; to: string; from: string; amount: string; comment?: string; }
-interface Req { id: number; user_id: string; address: string; amount: string; status: string; request_no: string; base_amount?: string; }
+interface Req { id: number; user_id: string; address: string; amount: string; status: string; request_no: string; base_amount?: string; rate?: string; }
 
 function parseEvmLogs(logs: Array<{ transactionHash: string; topics: string[]; data: string }>, decimals: number): Found[] {
   return logs
@@ -91,6 +91,22 @@ function parseTonTransfers(items: Array<Record<string, unknown>>, ownerRaw: stri
         to: owner,
         amount: toAmount(String(x.amount), decimals),
         comment: p && p["@type"] === "text_comment" ? String(p.comment ?? "").trim() : undefined,
+      };
+    });
+}
+/** Plain GRAM transfers into the club wallet (toncenter v3 transactions). */
+function parseTonNative(items: Array<Record<string, any>>, ownerRaw: string): Found[] {   // deno-lint-ignore no-explicit-any
+  const owner = ownerRaw.toUpperCase();
+  return items
+    .filter((t) => t.in_msg && t.in_msg.source && BigInt(t.in_msg.value ?? 0) > 0n && !t.description?.aborted && String(t.in_msg.destination ?? t.account).toUpperCase() === owner)
+    .map((t) => {
+      const d = t.in_msg.message_content?.decoded;
+      return {
+        tx_hash: b64ToHex(String(t.hash)),
+        from: String(t.in_msg.source),
+        to: owner,
+        amount: toAmount(String(t.in_msg.value), 9),
+        comment: d && d.type === "text_comment" ? String(d.comment ?? "").trim() : undefined,
       };
     });
 }
@@ -158,36 +174,42 @@ Deno.serve(async () => {
       const req = matchRequest(f, reqs, c.network);
       if (req) {
         reqByTx.set(f.tx_hash, req);
+        let usd = f.amount, coin: string | null = null;
+        if (c.network === "GRAM") {
+          const paid = Number(f.amount), want = Number(req.amount), base = Number(req.base_amount ?? 0);
+          usd = (paid >= want * 0.995 ? base : Math.floor(paid / want * base * 100) / 100).toFixed(6);
+          coin = f.amount;
+        }
         rows.push({
           user_id: req.user_id, network: c.network, tx_hash: f.tx_hash, from_address: f.from, to_address: f.to, request_id: req.id,
-          amount: f.amount, status: Number(f.amount) >= Number(c.min_deposit) ? "received" : "below_min",
+          amount: usd, coin_amount: coin, status: Number(usd) >= Number(c.min_deposit) ? "received" : "below_min",
         });
       } else {
         orphans.push({ network: c.network, tx_hash: f.tx_hash, address: f.to, from_address: f.from, amount: f.amount });
       }
     }
-    let created: Array<{ op_id: string; tx_hash: string; user_id: string; amount: string; status: string; to_address: string; request_id: number }> = [];
+    let created: Array<{ op_id: string; tx_hash: string; user_id: string; amount: string; coin_amount: string | null; status: string; to_address: string; request_id: number }> = [];
     if (rows.length) {
-      const ins = await admin.from("deposits").upsert(rows, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,status,to_address,request_id");
+      const ins = await admin.from("deposits").upsert(rows, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,coin_amount,status,to_address,request_id");
       if (ins.error) throw new Error("save: " + ins.error.message);
       created = ins.data ?? [];
     }
     for (const d of created) {
       await admin.from("deposit_requests").update({ status: "paid", tx_hash: d.tx_hash }).eq("id", d.request_id);
-      if (c.network !== "TON") await admin.rpc("pool_credit", { p_network: c.network, p_address: d.to_address, p_amount: d.amount });
+      if (c.network !== "TON" && c.network !== "GRAM") await admin.rpc("pool_credit", { p_network: c.network, p_address: d.to_address, p_amount: d.amount });
     }
     for (const d of created.filter((x) => x.status === "received")) {
       const req = reqByTx.get(d.tx_hash)!;
-      await notifyUser(d.user_id, `✅ Payment received: ${d.amount} USDT.\nWe are sending the chips to your ClubGG ID now.\nOperation: ${d.op_id}\n\n✅ Платёж получен: ${d.amount} USDT.\nСейчас отправим фишки на ваш ID в ClubGG.\nОперация: ${d.op_id}`);
+      await notifyUser(d.user_id, `✅ Payment received: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"}.\nWe are sending the chips to your ClubGG ID now.\nOperation: ${d.op_id}\n\n✅ Платёж получен: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"}.\nСейчас отправим фишки на ваш ID в ClubGG.\nОперация: ${d.op_id}`);
       const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
-      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.amount} USDT (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
+      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"} (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
     }
     let orphanNew = 0;
     if (orphans.length) {
       const oi = await admin.from("unmatched_deposits").upsert(orphans, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("tx_hash,address,amount,from_address");
       for (const o of oi.data ?? []) {
         orphanNew++;
-        await alertStaff(`⚠️ Unidentified payment ${o.amount} USDT (${c.network})\nTo: ${o.address}\nFrom: ${o.from_address}\nNo matching request. Check it by hand.\n${c.explorer_tx}${o.tx_hash}`);
+        await alertStaff(`⚠️ Unidentified payment ${Number(o.amount)} ${c.network === "GRAM" ? "GRAM" : "USDT"} (${c.network})\nTo: ${o.address}\nFrom: ${o.from_address}\nNo matching request. Check it by hand.\n${c.explorer_tx}${o.tx_hash}`);
       }
     }
     return { found: found.length, credited: created.length, unmatched: orphanNew };
@@ -198,7 +220,7 @@ Deno.serve(async () => {
     try {
       const st = await admin.from("scan_state").select("cursor").eq("network", c.network).maybeSingle();
       const cursor = Number(st.data?.cursor ?? 0);
-      const rq = await admin.from("deposit_requests").select("id,user_id,address,amount,status,request_no,base_amount").eq("network", c.network).in("status", ["open", "expired"]);
+      const rq = await admin.from("deposit_requests").select("id,user_id,address,amount,status,request_no,base_amount,rate").eq("network", c.network).in("status", ["open", "expired"]);
       const reqs = (rq.data ?? []) as Req[];
       let found: Found[] = [];
       let newCursor = cursor;
@@ -252,6 +274,19 @@ Deno.serve(async () => {
         const r = await fetch(`${c.rpc_url}/api/v3/jetton/transfers?${q}`, { headers });
         if (!r.ok) throw new Error(`toncenter ${r.status}`);
         found = parseTonTransfers((await r.json()).jetton_transfers ?? [], owner, c.usdt_contract, c.decimals);
+        newCursor = Date.now();
+      } else if (c.network === "GRAM") {
+        if (!c.receive_address) { summary[c.network] = "no wallet address set"; continue; }
+        scanned = 1;
+        const owner = tonToRaw(c.receive_address);
+        const sinceS = cursor ? Math.floor(cursor / 1000) - 900 : Math.floor(Date.now() / 1000) - 3600;
+        const q = new URLSearchParams({ account: owner, start_utime: String(sinceS), limit: "100", sort: "desc" });
+        const headers: Record<string, string> = {};
+        const key = Deno.env.get("TONCENTER_API_KEY"); if (key) headers["X-API-Key"] = key;
+        await new Promise((res) => setTimeout(res, 1100));          // toncenter free plan: 1 request per second
+        const r = await fetch(`${c.rpc_url}/api/v3/transactions?${q}`, { headers });
+        if (!r.ok) throw new Error(`toncenter ${r.status}`);
+        found = parseTonNative((await r.json()).transactions ?? [], owner);
         newCursor = Date.now();
       }
 

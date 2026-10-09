@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HDNodeWallet } from "https://esm.sh/ethers@6.13.4";
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
-const NETWORKS = ["TRC20", "BEP20", "TON"];
+const NETWORKS = ["TRC20", "BEP20", "TON", "GRAM"];
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 // ---- helpers (pure functions, unit-tested) ----
@@ -98,7 +98,26 @@ async function gasfree(method: "GET" | "POST", path: string, body?: unknown): Pr
 }
 const gasfreeOn = () => !!(Deno.env.get("GASFREE_API_KEY") && Deno.env.get("GASFREE_API_SECRET"));
 
-const COLS = "request_no,address,amount,base_amount,expires_at,status,network";
+
+/** GRAM price in USD from public exchange tickers (the first one that answers sensibly). */
+async function gramPrice(): Promise<number> {
+  const tries: Array<[string, (d: any) => unknown]> = [   // deno-lint-ignore no-explicit-any
+    ["https://api.binance.com/api/v3/ticker/price?symbol=GRAMUSDT", (d) => d.price],
+    ["https://www.okx.com/api/v5/market/ticker?instId=GRAM-USDT", (d) => d.data?.[0]?.last],
+    ["https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd", (d) => d["the-open-network"]?.usd],
+  ];
+  for (const [url, pick] of tries) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) continue;
+      const p = Number(pick(await r.json()));
+      if (p > 0.05 && p < 1000) return p;
+    } catch { /* next */ }
+  }
+  throw new Error("no GRAM price");
+}
+
+const COLS = "request_no,address,amount,base_amount,expires_at,status,network,rate";
 
 Deno.serve(async (req: Request) => {
   const h = cors(req.headers.get("origin"));
@@ -141,7 +160,7 @@ Deno.serve(async (req: Request) => {
 
   // Where should the player pay?
   let address: string | undefined;
-  if (network === "TON") {
+  if (network === "TON" || network === "GRAM") {
     address = cfg.receive_address ?? undefined;
     if (!address) return out({ error: "not configured" }, 500, h);
   } else {
@@ -170,15 +189,21 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // GRAM: the player asked for chips in USD; lock the rate and ask for that much GRAM (rounded up to 0.0001).
+  let payBase = base, rate: number | null = null;
+  if (network === "GRAM") {
+    try { rate = await gramPrice(); } catch { return out({ error: "no price, try again" }, 503, h); }
+    payBase = (Math.ceil(Number(base) / rate * 10000) / 10000).toFixed(6);
+  }
   // Add the unique tail; if that exact amount is taken on this address, try another tail.
   const expires = new Date(Date.now() + Number(cfg.request_ttl_min) * 60_000).toISOString();
   for (let attempt = 0; attempt < 25; attempt++) {
     const rnd = crypto.getRandomValues(new Uint32Array(1))[0];
-    const amount = addTail(base, makeTail(rnd));
+    const amount = addTail(payBase, makeTail(rnd));
     const requestNo = makeRequestNo(Date.now(), crypto.getRandomValues(new Uint8Array(16)));
     const ins = await admin.from("deposit_requests").insert({
       request_no: requestNo, user_id: u.user.id, network, address,
-      base_amount: base, amount, expires_at: expires,
+      base_amount: base, amount, expires_at: expires, rate,
     }).select(COLS).single();
     if (!ins.error) return out({ request: ins.data }, 200, h);
     if (ins.error.code !== "23505") { console.error("request insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }

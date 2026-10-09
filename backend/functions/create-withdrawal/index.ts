@@ -9,6 +9,7 @@ const ADDRESS: Record<string, RegExp> = {
   TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
   BEP20: /^0x[0-9a-fA-F]{40}$/,
   TON: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/,
+  GRAM: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/,
 };
 
 // ---- helpers (pure functions, unit-tested) ----
@@ -39,6 +40,25 @@ function cors(o: string | null): Record<string, string> {
     "Content-Type": "application/json",
   };
 }
+
+/** GRAM price in USD from public exchange tickers (the first one that answers sensibly). */
+async function gramPrice(): Promise<number> {
+  const tries: Array<[string, (d: any) => unknown]> = [   // deno-lint-ignore no-explicit-any
+    ["https://api.binance.com/api/v3/ticker/price?symbol=GRAMUSDT", (d) => d.price],
+    ["https://www.okx.com/api/v5/market/ticker?instId=GRAM-USDT", (d) => d.data?.[0]?.last],
+    ["https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd", (d) => d["the-open-network"]?.usd],
+  ];
+  for (const [url, pick] of tries) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) continue;
+      const p = Number(pick(await r.json()));
+      if (p > 0.05 && p < 1000) return p;
+    } catch { /* next */ }
+  }
+  throw new Error("no GRAM price");
+}
+
 const out = (b: unknown, s: number, h: Record<string, string>) => {
   if (s >= 400) console.warn("rejected:", s, JSON.stringify(b));
   return new Response(JSON.stringify(b), { status: s, headers: h });
@@ -82,14 +102,20 @@ Deno.serve(async (req: Request) => {
   const fee = calcFee(amount, Number(cfg.wd_fee_fixed ?? 0), Number(cfg.wd_fee_pct ?? 0));
   const net = (Math.round(Number(amount) * 100) - Math.round(Number(fee) * 100)) / 100;
   if (net < 1) return out({ error: "below fee", fee }, 400, h);
-  const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2) }).select("id,op_id").single();
+  // GRAM: paid by a manager in GRAM at the rate of this moment (shown on the card).
+  let rate: number | null = null, coin: string | null = null;
+  if (network === "GRAM") {
+    try { rate = await gramPrice(); } catch { return out({ error: "no price, try again" }, 503, h); }
+    coin = (Math.floor(net / rate * 10000) / 10000).toFixed(4);
+  }
+  const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2), rate, coin_amount: coin }).select("id,op_id").single();
   if (ins.error) { console.error("withdrawal insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
 
   // Alert every manager (the queue button opens the Mini App on the managers' tab).
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (botToken) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
-    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nOperation: ${ins.data.op_id}\nClubGG ID: ${fid(profile.gg_id)}\nPayout: ${net} USDT (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
+    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nOperation: ${ins.data.op_id}\nClubGG ID: ${fid(profile.gg_id)}\nPayout: ${net} USDT${coin ? ` = ${coin} GRAM (1 GRAM = $${rate})` : ""} (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
     for (const s of staff ?? []) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -98,5 +124,5 @@ Deno.serve(async (req: Request) => {
       }).catch(() => {});
     }
   }
-  return out({ ok: true, id: ins.data.id, op_id: ins.data.op_id, fee: Number(fee), payout: net }, 200, h);
+  return out({ ok: true, id: ins.data.id, op_id: ins.data.op_id, fee: Number(fee), payout: net, coin_amount: coin }, 200, h);
 });

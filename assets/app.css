@@ -315,3 +315,18 @@ body:not(.nobind) #bindcard, #tab-deposit:not(.st-form) #bindcard { display: non
 .confirmcard { max-width: 380px; width: 100%; }
 .confirmtext { margin: 0; font-size: 16px; line-height: 1.45; word-break: break-word; }
 #confirm { z-index: 30; }
+
+.tabs.has-admin { grid-template-columns: repeat(4, 1fr) 46px; }
+.tabs:not(.has-admin) { grid-template-columns: repeat(3, 1fr) 46px; }
+.tabs button.iconly { order: 9; padding: 11px 0; }
+.tabs button.iconly span { display: none; }
+.tabs button.iconly svg { display: block !important; width: 19px; height: 19px; }
+.srow { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 15px; }
+.srow b { font-weight: 500; }
+.wrow { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--card-2); border: 1px solid var(--line); }
+.wrow .wn { display: flex; justify-content: space-between; font-size: 13px; color: var(--soft); }
+.wrow .addr { background: none; border: 0; padding: 0; font-size: 13px; }
+.ok-t { color: var(--green); font-weight: 500; }
+.no-t { color: var(--amber); font-weight: 500; }
+
+body[data-tab="settings"] #pinprompt, body[data-tab="settings"] #nocode, body[data-tab="settings"] #noid { display: none !important; }

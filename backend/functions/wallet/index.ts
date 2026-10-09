@@ -144,8 +144,7 @@ Deno.serve(async (req: Request) => {
 
   if (action === "newcode") {                      // after a change through support the old code is gone: make a new one
     const sec = (await admin.from("player_security").select("code_hash").eq("user_id", uid).maybeSingle()).data;
-    const w = (await admin.from("player_wallets").select("chain").eq("user_id", uid).limit(1)).data ?? [];
-    if (sec?.code_hash || !w.length) return out({ error: "not allowed" }, 400, h);
+    if (sec?.code_hash) return out({ error: "not allowed" }, 400, h);
     const code = newCode();
     await admin.from("player_security").upsert({ user_id: uid, code_hash: await hashCode(uid, code), updated_at: new Date().toISOString() });
     return out({ ...(await state()), code }, 200, h);

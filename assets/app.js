@@ -88,8 +88,10 @@
   /* ---------- tabs ---------- */
   function showTab(name) {
     document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); });
-    ['deposit', 'withdraw', 'history', 'admin'].forEach(function (n) { $('tab-' + n).hidden = n !== name; });
-    $('nets').hidden = name === 'history' || name === 'admin';
+    document.body.dataset.tab = name;
+    ['deposit', 'withdraw', 'history', 'admin', 'settings'].forEach(function (n) { $('tab-' + n).hidden = n !== name; });
+    $('nets').hidden = name === 'history' || name === 'admin' || name === 'settings';
+    if (name === 'settings') paintSettings();
     if (name === 'history') loadHistory();
     if (name === 'admin') loadAdmin(true);
   }
@@ -177,7 +179,7 @@
   }
 
   /* ---------- actions ---------- */
-  $('open-site').addEventListener('click', function () { try { tg.openLink('https://zerake.com/'); } catch (e) { window.open('https://zerake.com/', '_blank'); } });
+  $('open-site').addEventListener('click', function () { showTab('settings'); setTimeout(function () { $('s-ggin').focus(); }, 100); });
 
   function wmsg(en, ru, bad) {
     var m = $('wmsg'); m.innerHTML = bi(en, ru); m.className = 'note' + (bad ? ' bad' : ''); m.hidden = false;
@@ -194,6 +196,60 @@
     } catch (e) { return a; }
   }
   var pending = [], hasCode = true, hasPin = false, sessionPin = '';
+  /* ---------- settings ---------- */
+  function paintSettings() {
+    var u = tg.initDataUnsafe && tg.initDataUnsafe.user;
+    $('s-tg').textContent = u ? (u.username ? '@' + u.username : (u.first_name || '—')) : '—';
+    $('s-gg').textContent = ggId ? fid(ggId) : t('not set', 'не указан');
+    var locked = !!ggId && settingsLocked;
+    $('s-gglock').hidden = !locked; $('s-ggform').hidden = locked;
+    if (!locked && ggId) $('s-ggin').value = fid(ggId);
+    var box = $('s-wallets'); box.innerHTML = '';
+    ['TRON', 'BSC', 'TON'].forEach(function (ch) {
+      var r = el('div', 'wrow');
+      r.appendChild(el('div', 'wn', '<span>' + CHAIN_NAME[ch] + '</span><span>' + (wallets[ch] ? '🔒' : '') + '</span>'));
+      var a = el('div', 'addr', ''); a.textContent = wallets[ch] || t('not bound yet', 'ещё не привязан'); if (!wallets[ch]) a.style.color = 'var(--soft)';
+      r.appendChild(a); box.appendChild(r);
+    });
+    $('s-pin').innerHTML = hasPin ? '<span class="ok-t">' + t('on', 'включён') + '</span>' : '<span class="no-t">' + t('off', 'выключен') + '</span>';
+    $('s-pinbtn').innerHTML = hasPin ? bi('Change PIN', 'Сменить PIN-код') : bi('Set PIN', 'Установить PIN-код');
+    var bioOn = bioCan() && bm.isBiometricTokenSaved;
+    $('s-bio').innerHTML = !bioCan() ? '<span class="muted">' + t('not available', 'недоступно') + '</span>' : bioOn ? '<span class="ok-t">' + t('on', 'включён') + '</span>' : '<span class="no-t">' + t('off', 'выключен') + '</span>';
+    $('s-biobtn').hidden = !bioCan() || !hasPin;
+    $('s-biobtn').innerHTML = bioOn ? bi('Turn off', 'Выключить') : bi('Turn on', 'Включить');
+    $('s-code').innerHTML = hasCode ? '<span class="ok-t">' + t('created', 'создан') + '</span>' : '<span class="no-t">' + t('not created', 'не создан') + '</span>';
+    $('s-codebtn').hidden = hasCode;
+  }
+  var settingsLocked = false;
+  async function loadLockState() {
+    if (!me) return;
+    var d = await sb.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', me.id);
+    var w = await sb.from('withdrawals').select('id', { count: 'exact', head: true }).eq('user_id', me.id);
+    settingsLocked = (d.count || 0) + (w.count || 0) > 0;
+  }
+  $('s-ggform').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var m = $('s-ggmsg'); m.hidden = true;
+    var id = $('s-ggin').value.replace(/[\s-]/g, '');
+    if (!/^[0-9]{5,10}$/.test(id)) { m.className = 'note bad'; m.innerHTML = bi('The ID must be 5–10 digits.', 'ID должен состоять из 5–10 цифр.'); m.hidden = false; return; }
+    ask('Save ClubGG ID ' + fid(id) + '? After your first deposit it cannot be changed.', 'Сохранить ID ' + fid(id) + '? После первого депозита сменить его будет нельзя.', async function () {
+      var r = await sb.from('profiles').upsert({ user_id: me.id, gg_id: id, updated_at: new Date().toISOString() });
+      if (r.error) { m.className = 'note bad'; m.hidden = false; m.innerHTML = /duplicate|unique/i.test(r.error.message) ? bi('This ID is already used by another account. If it is yours, write to support.', 'Этот ID уже привязан к другому аккаунту. Если он ваш — напишите в поддержку.') : /locked/i.test(r.error.message) ? bi('The ID is locked. Change it through support.', 'ID заблокирован для смены. Сменить можно через поддержку.') : bi('Could not save.', 'Не удалось сохранить.'); return; }
+      haptic('success'); toast(t('ClubGG ID saved', 'ID в ClubGG сохранён'));
+      await loadProfile(); paintSettings();
+    });
+  });
+  $('s-pinbtn').addEventListener('click', function () { openLock(hasPin ? 'old' : 'set'); });
+  $('s-biobtn').addEventListener('click', function () {
+    if (bm.isBiometricTokenSaved) { bm.updateBiometricToken('', function () { toast(bioName() + t(' turned off', ' выключен')); paintSettings(); }); return; }
+    if (!sessionPin) { openLock('confirm', function (p) { if (p) { offerBio(p); setTimeout(paintSettings, 1500); } }); return; }
+    offerBio(sessionPin); setTimeout(paintSettings, 1500);
+  });
+  $('s-codebtn').addEventListener('click', async function () {
+    var r = await walletCall({ action: 'newcode' }); if (r.ok) { takeState(r.data); paintSettings(); }
+  });
+  document.querySelectorAll('[data-setlang]').forEach(function (b) { b.addEventListener('click', function () { setLang(b.dataset.setlang); renderHistory(); paintSettings(); }); });
+
   /* ---------- PIN and Face ID ---------- */
   var bm = tg && tg.BiometricManager, bioReady = false;
   function bioInit(cb) {
@@ -233,7 +289,7 @@
       var r2 = await walletCall({ action: 'pin_set', pin: pin, old_pin: window.__oldPin || '' });
       window.__oldPin = '';
       if (!r2.ok) { entry = ''; firstPin = ''; paintDots(); shake(); lockMsg('Could not save the PIN (wrong current PIN?).', 'Не удалось сохранить PIN (неверный текущий PIN?).'); lockMode = hasPin ? 'old' : 'set'; return; }
-      sessionPin = pin; hasPin = true; $('pinprompt').hidden = true; haptic('success'); closeLock();
+      sessionPin = pin; hasPin = true; $('pinprompt').hidden = true; haptic('success'); closeLock(); if (!$('tab-settings').hidden) paintSettings();
       offerBio(pin);
     }
   }
@@ -928,7 +984,7 @@
     var u = tg.initDataUnsafe && tg.initDataUnsafe.user;
     var nm = u ? (u.username ? '@' + u.username : (u.first_name || '')) : '';
     if (nm) { var w = $('who'); w.innerHTML = '<span class="ava"></span><span class="nm"></span>'; w.firstChild.textContent = (u.first_name || u.username || '?').charAt(0).toUpperCase(); w.lastChild.textContent = nm; }
-    return Promise.all([loadProfile(), loadAddress()]).then(loadWallets);
+    return Promise.all([loadProfile(), loadAddress(), loadLockState()]).then(loadWallets);
   }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;
     var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];

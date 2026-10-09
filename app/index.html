@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=28">
+<link rel="stylesheet" href="../assets/app.css?v=30">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -24,6 +24,7 @@
     <button role="tab" data-tab="deposit" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg><span class="en">Buy chips</span><span class="ru">Купить</span></button>
     <button role="tab" data-tab="withdraw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span class="en">Sell chips</span><span class="ru">Продать</span></button>
     <button role="tab" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="en">History</span><span class="ru">История</span></button>
+    <button role="tab" data-tab="settings" class="iconly" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="en">Settings</span><span class="ru">Настройки</span></button>
     <button role="tab" data-tab="admin" id="tab-admin-btn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span class="en">Queue</span><span class="ru">Заявки</span><i class="badge" id="adm-badge" hidden>0</i></button>
   </nav>
 
@@ -57,11 +58,8 @@
   <!-- ClubGG ID banner (shown until the player adds an ID) -->
   <section id="noid" class="card warn" hidden>
     <b class="ctitle"><span class="en">Add your ClubGG ID first</span><span class="ru">Сначала добавьте ID в ClubGG</span></b>
-    <p>
-      <span class="en">We send chips to this ID. Open zerake.com in your browser, sign in and enter it in the account menu.</span>
-      <span class="ru">Фишки отправляются на этот ID. Откройте zerake.com в браузере, войдите и введите его в меню аккаунта.</span>
-    </p>
-    <button class="btn" id="open-site" type="button"><span class="en">Open zerake.com</span><span class="ru">Открыть zerake.com</span></button>
+    <p><span class="en">We send chips to this ID and take them from it for cash outs. Enter it in Settings.</span><span class="ru">На этот ID приходят фишки и с него списываются при выводе. Укажите его в настройках.</span></p>
+    <button class="btn" id="open-site" type="button"><span class="en">Enter ClubGG ID</span><span class="ru">Указать ID в ClubGG</span></button>
   </section>
 
   <!-- Deposit -->
@@ -250,6 +248,42 @@
   </section>
 
   <!-- History -->
+  <section id="tab-settings" class="pane" hidden>
+    <div class="card">
+      <div class="label"><span class="en">Account</span><span class="ru">Аккаунт</span></div>
+      <div class="srow"><span class="muted">Telegram</span><b id="s-tg">—</b></div>
+      <div class="srow"><span class="muted"><span class="en">ClubGG ID</span><span class="ru">ID в ClubGG</span></span><span><b id="s-gg">—</b> <span class="pill" id="s-gglock" hidden>🔒</span></span></div>
+      <form class="addstaff" id="s-ggform" autocomplete="off" hidden>
+        <input id="s-ggin" inputmode="numeric" placeholder="1234-5678">
+        <button class="btn" type="submit"><span class="en">Save</span><span class="ru">Сохранить</span></button>
+      </form>
+      <p class="hint" id="s-gghint"><span class="en">Chips are sent to this ID and taken from it for cash outs. After your first deposit it can be changed only through support.</span><span class="ru">На этот ID приходят фишки и с него списываются при выводе. После первого депозита сменить его можно только через поддержку.</span></p>
+      <p class="note" id="s-ggmsg" hidden></p>
+    </div>
+
+    <div class="card">
+      <div class="label"><span class="en">Bound wallets</span><span class="ru">Привязанные кошельки</span></div>
+      <div class="stack" id="s-wallets"></div>
+      <p class="hint"><span class="en">Cash outs go only to these wallets. A wallet is bound before the first deposit on its network.</span><span class="ru">Выводы уходят только на эти кошельки. Кошелёк привязывается перед первым депозитом в своей сети.</span></p>
+    </div>
+
+    <div class="card">
+      <div class="label"><span class="en">Security</span><span class="ru">Безопасность</span></div>
+      <div class="srow"><span class="muted"><span class="en">PIN code</span><span class="ru">PIN-код</span></span><span id="s-pin">—</span></div>
+      <button class="btn" type="button" id="s-pinbtn"></button>
+      <div class="srow"><span class="muted">Face ID / <span class="en">fingerprint</span><span class="ru">отпечаток</span></span><span id="s-bio">—</span></div>
+      <button class="btn" type="button" id="s-biobtn" hidden></button>
+      <div class="srow"><span class="muted"><span class="en">Recovery code</span><span class="ru">Код восстановления</span></span><span id="s-code">—</span></div>
+      <button class="btn" type="button" id="s-codebtn" hidden><span class="en">Create recovery code</span><span class="ru">Создать код восстановления</span></button>
+      <p class="hint"><span class="en">The recovery code lets you change a bound wallet in an emergency (takes effect in 48 hours). It is shown only once.</span><span class="ru">Код восстановления позволяет сменить привязанный кошелёк в экстренном случае (через 48 часов). Показывается только один раз.</span></p>
+    </div>
+
+    <div class="card">
+      <div class="label"><span class="en">Language</span><span class="ru">Язык</span></div>
+      <div class="tbtns two"><button class="btn" type="button" data-setlang="ru">Русский</button><button class="btn" type="button" data-setlang="en">English</button></div>
+    </div>
+  </section>
+
   <section id="tab-history" class="pane" hidden>
     <div id="hist" class="list"></div>
   </section>
@@ -305,6 +339,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=28"></script>
+<script src="../assets/app.js?v=30"></script>
 </body>
 </html>

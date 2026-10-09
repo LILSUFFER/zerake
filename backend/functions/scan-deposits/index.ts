@@ -30,7 +30,7 @@ function topicToAddr(topic: string): string {
   return "0x" + topic.slice(-40);
 }
 interface Found { tx_hash: string; to: string; from: string; amount: string; }
-interface Req { id: number; user_id: string; address: string; amount: string; status: string; request_no: string; }
+interface Req { id: number; user_id: string; address: string; amount: string; status: string; request_no: string; base_amount?: string; }
 
 function parseEvmLogs(logs: Array<{ transactionHash: string; topics: string[]; data: string }>, decimals: number): Found[] {
   return logs
@@ -75,13 +75,14 @@ Deno.serve(async () => {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   const summary: Record<string, unknown> = {};
 
-  async function alertStaff(text: string) {
+  async function alertStaff(text: string, withQueueButton = false) {
     if (!botToken) return;
     const { data: staff } = await admin.from("staff").select("telegram_id");
+    const markup = withQueueButton ? { inline_keyboard: [[{ text: "Open the queue", web_app: { url: "https://zerake.com/app/?tab=admin" } }]] } : undefined;
     for (const s of staff ?? []) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: s.telegram_id, text, disable_web_page_preview: true }),
+        body: JSON.stringify({ chat_id: s.telegram_id, text, disable_web_page_preview: true, reply_markup: markup }),
       }).catch(() => {});
     }
   }
@@ -102,7 +103,7 @@ Deno.serve(async () => {
         await admin.from("deposit_requests").update({ status: "expired" }).eq("network", "TRC20").eq("status", "open").lt("expires_at", now.toISOString());
         await admin.from("deposit_requests").update({ status: "closed" }).eq("network", "TRC20").eq("status", "expired").lt("expires_at", new Date(now.getTime() - 24 * 3600 * 1000).toISOString());
 
-        const rq = await admin.from("deposit_requests").select("id,user_id,address,amount,status,request_no").eq("network", "TRC20").in("status", ["open", "expired"]);
+        const rq = await admin.from("deposit_requests").select("id,user_id,address,amount,status,request_no,base_amount").eq("network", "TRC20").in("status", ["open", "expired"]);
         reqs = (rq.data ?? []) as Req[];
         const recv = await admin.from("trc_pool").select("address").eq("status", "receiving");
         const addrs = new Set<string>([...reqs.map((r) => r.address), ...(recv.data ?? []).map((r) => r.address)]);
@@ -150,7 +151,11 @@ Deno.serve(async () => {
         for (const d of created.filter((x) => x.status === "received")) {
           const req = reqByTx.get(d.tx_hash)!;
           const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
-          await alertStaff(`💰 Deposit ${d.amount} USDT (TRC20)\nClubGG ID: ${p.data?.gg_id ?? "NOT SET"}\nRequest ${req.request_no}${req.status === "expired" ? " (paid after the 30 minutes)" : ""}\nSend the chips, then mark it in the Mini App.\n${c.explorer_tx}${d.tx_hash}`);
+          await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT
+ClubGG ID: ${p.data?.gg_id ?? "NOT SET"}
+Paid: ${d.amount} USDT (TRC20) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}
+Send the chips in ClubGG, then take it and mark it as sent.
+${c.explorer_tx}${d.tx_hash}`, true);
         }
         let orphanNew = 0;
         if (orphans.length) {
@@ -195,7 +200,11 @@ Deno.serve(async () => {
         }
         for (const d of created.filter((x) => x.status === "received")) {
           const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
-          await alertStaff(`💰 Deposit ${d.amount} USDT (${c.network})\nClubGG ID: ${p.data?.gg_id ?? "NOT SET"}\nSend the chips, then mark it in the Mini App.\n${c.explorer_tx}${d.tx_hash}`);
+          await alertStaff(`💰 Top up chips: ${d.amount} USDT
+ClubGG ID: ${p.data?.gg_id ?? "NOT SET"}
+Network ${c.network}
+Send the chips in ClubGG, then take it and mark it as sent.
+${c.explorer_tx}${d.tx_hash}`, true);
         }
         await admin.from("scan_state").upsert({ network: c.network, cursor: newCursor, updated_at: new Date().toISOString() });
         summary[c.network] = { scanned: byAddr.size, found: found.length, new: created.length };

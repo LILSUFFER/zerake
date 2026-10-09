@@ -88,3 +88,31 @@ input:focus { outline: none; border-color: var(--green); }
 .amt small { font-size: 14px; color: var(--soft); font-weight: 400; }
 .qr { display: grid; place-items: center; }
 .qr svg { background: #fff; padding: 10px; border-radius: 14px; width: 190px; height: 190px; }
+
+.tabs.has-admin { grid-template-columns: repeat(4, 1fr); }
+.tabs button { position: relative; }
+.badge { position: absolute; top: 2px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font: 500 11px/18px Geist, sans-serif; font-style: normal; text-align: center; }
+.sum { grid-template-columns: 1fr 1fr; text-align: center; }
+.sum div { display: grid; gap: 2px; }
+.sum b { font-size: 26px; font-weight: 500; }
+.sum span { color: var(--soft); font-size: 13px; }
+.tcard { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; display: grid; gap: 10px; }
+.tcard.mine { border-color: var(--green); }
+.tcard.taken { opacity: .6; }
+.trow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tamt { font-size: 28px; font-weight: 500; color: var(--green); letter-spacing: .01em; }
+.tnet { color: var(--soft); font-size: 13px; }
+.tid { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--card-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+.tid b { font-size: 20px; font-weight: 500; letter-spacing: .03em; }
+.tmeta { color: var(--soft); font-size: 13px; }
+.tstat { font-size: 13px; color: var(--green); }
+.tbtns { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.tbtns.two { grid-template-columns: 2fr 1fr; }
+.tbtns .btn { padding: 13px 14px; font-size: 15px; }
+.mini { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--soft); padding: 8px 0; border-top: 1px solid var(--line); }
+.mini:first-child { border-top: 0; }
+.mini b { color: var(--fg); font-weight: 500; }
+.addstaff { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
+.addstaff input { padding: 12px 14px; font-size: 16px; }
+.addstaff .btn { width: auto; padding: 12px 18px; }
+.linkish { background: none; border: 0; color: var(--soft); text-decoration: underline; font: 500 13px Geist, sans-serif; cursor: pointer; padding: 0; }

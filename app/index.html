@@ -20,10 +20,11 @@
     <div class="who" id="who"></div>
   </header>
 
-  <nav class="tabs" role="tablist">
+  <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="deposit" class="on"><span class="en">Deposit</span><span class="ru">Депозит</span></button>
     <button role="tab" data-tab="withdraw"><span class="en">Withdraw</span><span class="ru">Вывод</span></button>
     <button role="tab" data-tab="history"><span class="en">History</span><span class="ru">История</span></button>
+    <button role="tab" data-tab="admin" id="tab-admin-btn" hidden><span class="en">Queue</span><span class="ru">Заявки</span><i class="badge" id="adm-badge" hidden>0</i></button>
   </nav>
 
   <div class="nets" id="nets">
@@ -129,6 +130,33 @@
       <li class="only-bep"><span class="en">The network fee is taken from the payout. On BEP20 it is usually a few cents.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети BEP20 она обычно составляет несколько центов.</span></li>
       <li><span class="en">Minimum withdrawal: <b class="minwd">10</b> USDT.</span><span class="ru">Минимальный вывод: <b class="minwd">10</b> USDT.</span></li>
     </ol>
+  </section>
+
+  <!-- Manager panel (shown to staff only) -->
+  <section id="tab-admin" class="pane" hidden>
+    <div class="card sum" id="adm-sum">
+      <div><b id="adm-n-new">0</b><span><span class="en">Waiting</span><span class="ru">Ждут</span></span></div>
+      <div><b id="adm-n-mine">0</b><span><span class="en">In work</span><span class="ru">В работе</span></span></div>
+    </div>
+    <div class="stack" id="adm-queue"></div>
+    <div class="card" id="adm-unm-card" hidden>
+      <div class="label"><span class="en">Unidentified payments</span><span class="ru">Неопознанные платежи</span></div>
+      <div class="stack" id="adm-unm"></div>
+    </div>
+    <div class="card" id="adm-done-card" hidden>
+      <div class="label"><span class="en">Done recently</span><span class="ru">Недавно выполнено</span></div>
+      <div class="stack" id="adm-done"></div>
+    </div>
+    <div class="card" id="adm-owner" hidden>
+      <div class="label"><span class="en">Managers</span><span class="ru">Менеджеры</span></div>
+      <div class="stack" id="adm-staff"></div>
+      <form class="addstaff" id="adm-add" autocomplete="off">
+        <input id="adm-user" placeholder="@username" spellcheck="false" autocapitalize="off">
+        <button class="btn" type="submit"><span class="en">Add</span><span class="ru">Добавить</span></button>
+      </form>
+      <p class="note" id="adm-msg" hidden></p>
+      <p class="hint"><span class="en">A manager must open this app once so we can find them.</span><span class="ru">Менеджер должен один раз открыть это приложение, чтобы мы его нашли.</span></p>
+    </div>
   </section>
 
   <!-- History -->

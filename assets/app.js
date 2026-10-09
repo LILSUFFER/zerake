@@ -62,9 +62,10 @@
   /* ---------- tabs ---------- */
   function showTab(name) {
     document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); });
-    ['deposit', 'withdraw', 'history'].forEach(function (n) { $('tab-' + n).hidden = n !== name; });
-    $('nets').hidden = name === 'history';
+    ['deposit', 'withdraw', 'history', 'admin'].forEach(function (n) { $('tab-' + n).hidden = n !== name; });
+    $('nets').hidden = name === 'history' || name === 'admin';
     if (name === 'history') loadHistory();
+    if (name === 'admin') loadAdmin(true);
   }
   document.querySelectorAll('.tabs button').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.tab); }); });
 
@@ -268,6 +269,151 @@
     });
   });
 
+  /* ---------- manager panel (staff only; every action is checked again on the server) ---------- */
+  var staffRole = null, admTimer = null, seenNew = null, admData = { explorer: {} };
+  async function adminCall(body) {
+    var ses = (await sb.auth.getSession()).data.session;
+    var r = await fetch(C.supabaseUrl + '/functions/v1/admin-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
+      body: JSON.stringify(body)
+    });
+    var d = {}; try { d = await r.json(); } catch (e) {}
+    return { ok: r.ok, status: r.status, data: d };
+  }
+  function ago(iso) {
+    var m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if (m < 1) return t('just now', 'только что');
+    if (m < 60) return m + t(' min ago', ' мин назад');
+    return Math.floor(m / 60) + t(' h ago', ' ч назад');
+  }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function btn(cls, html, fn) { var b = el('button', 'btn ' + cls, html); b.type = 'button'; b.addEventListener('click', function () { b.disabled = true; fn(b); }); return b; }
+  function copyChip(text) {
+    var b = el('button', 'chip', bi('Copy', 'Копировать')); b.type = 'button';
+    b.addEventListener('click', function () {
+      var done = function () { haptic('success'); var o = b.innerHTML; b.innerHTML = bi('Copied', 'Скопировано'); setTimeout(function () { b.innerHTML = o; }, 1400); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+    return b;
+  }
+  function ask(en, ru, yes) {
+    var msg = t(en, ru);
+    if (tg && tg.showConfirm) tg.showConfirm(msg, function (ok) { if (ok) yes(); else loadAdmin(false); });
+    else if (window.confirm(msg)) yes(); else loadAdmin(false);
+  }
+  async function act(action, id) {
+    var r = await adminCall({ action: action, id: id });
+    if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Эту заявку уже взял или закрыл кто-то другой.')); } catch (e) {} }
+    else if (r.ok) haptic('success');
+    loadAdmin(false);
+  }
+  function renderQueue(items) {
+    var box = $('adm-queue'); box.innerHTML = '';
+    var nNew = 0, nMine = 0;
+    if (!items.length) { box.appendChild(el('div', 'empty', bi('No deposits are waiting. Well done.', 'Заявок нет. Всё выполнено.'))); }
+    items.forEach(function (d) {
+      var free = !d.claimed_name, mine = d.mine;
+      if (free) nNew++;
+      if (mine) nMine++;
+      var need = d.base_amount != null ? Number(d.base_amount) : Number(d.amount);
+      var card = el('div', 'tcard' + (mine ? ' mine' : (!free ? ' taken' : '')));
+      var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', need + ' USDT')); top.appendChild(el('div', 'tnet', d.network)); card.appendChild(top);
+      var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (d.gg_id || '—') + '</b>'));
+      if (d.gg_id) idr.appendChild(copyChip(d.gg_id));
+      card.appendChild(idr);
+      var meta = el('div', 'tmeta');
+      meta.innerHTML = bi('Waiting ', 'Ждёт ') + ago(d.created_at) + (Number(d.amount) !== need ? ' · ' + bi('paid ', 'оплачено ') + d.amount : '');
+      card.appendChild(meta);
+      if (!d.gg_id) card.appendChild(el('div', 'note bad', bi('The player has not set a ClubGG ID. Ask them before sending chips.', 'Игрок не указал ID в ClubGG. Уточните у него до отправки фишек.')));
+      if (!free && !mine) card.appendChild(el('div', 'tstat', bi('In work: ', 'В работе: ') + d.claimed_name));
+      var b = el('div', 'tbtns');
+      if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { act('claim', d.id); }));
+      else if (mine) {
+        b.className = 'tbtns two';
+        b.appendChild(btn('primary', bi('Chips sent', 'Фишки отправлены'), function () {
+          ask('Mark ' + need + ' USDT for ID ' + (d.gg_id || '—') + ' as sent?', 'Отметить ' + need + ' USDT для ID ' + (d.gg_id || '—') + ' как отправленное?', function () { act('mark_sent', d.id); });
+        }));
+        b.appendChild(btn('', bi('Release', 'Отпустить'), function () { act('release', d.id); }));
+      } else if (staffRole === 'owner') b.appendChild(btn('', bi('Take over', 'Забрать себе'), function () { act('claim', d.id); }));
+      if (b.childNodes.length) card.appendChild(b);
+      if (d.tx_hash && admData.explorer[d.network]) {
+        var a = el('button', 'linkish', bi('View transfer', 'Посмотреть перевод')); a.type = 'button';
+        a.addEventListener('click', function () { var u = admData.explorer[d.network] + d.tx_hash; try { tg.openLink(u); } catch (e) { window.open(u, '_blank'); } });
+        card.appendChild(a);
+      }
+      box.appendChild(card);
+    });
+    $('adm-n-new').textContent = nNew; $('adm-n-mine').textContent = nMine;
+    var bdg = $('adm-badge'); bdg.textContent = nNew; bdg.hidden = nNew === 0;
+    // a new waiting deposit appeared since the last check: buzz the phone
+    var ids = items.filter(function (d) { return !d.claimed_name; }).map(function (d) { return d.id; });
+    if (seenNew) {
+      var fresh = ids.filter(function (i) { return seenNew.indexOf(i) < 0; });
+      if (fresh.length) { try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {} }
+    }
+    seenNew = ids;
+  }
+  function renderMini(boxId, cardId, rows) {
+    var box = $(boxId); box.innerHTML = ''; $(cardId).hidden = !rows.length;
+    rows.forEach(function (r) { box.appendChild(r); });
+  }
+  async function loadAdmin(full) {
+    if (!staffRole) return;
+    var q = await adminCall({ action: 'queue' });
+    if (q.ok) { admData.explorer = q.data.explorer || {}; renderQueue(q.data.items || []); }
+    if (!full && $('tab-admin').hidden) return;
+    var d = await adminCall({ action: 'done' });
+    if (d.ok) renderMini('adm-done', 'adm-done-card', (d.data.items || []).map(function (x) {
+      return el('div', 'mini', '<span>' + (x.gg_id || '—') + ' · ' + Number(x.base_amount != null ? x.base_amount : x.amount) + ' USDT</span><span><b>' + (x.handled_name || '') + '</b> · ' + ago(x.handled_at) + '</span>');
+    }));
+    var u = await adminCall({ action: 'unmatched' });
+    if (u.ok) renderMini('adm-unm', 'adm-unm-card', (u.data.items || []).map(function (x) {
+      var row = el('div', 'tcard');
+      row.appendChild(el('div', 'tamt', Number(x.amount) + ' USDT'));
+      row.appendChild(el('div', 'tmeta', bi('To ', 'На ') + x.address.slice(0, 8) + '…  ' + bi('from ', 'от ') + String(x.from_address || '').slice(0, 8) + '… · ' + ago(x.seen_at)));
+      row.appendChild(el('div', 'tmeta', bi('No request matches this amount. Check it by hand.', 'Ни одна заявка не подходит по сумме. Проверьте вручную.')));
+      row.appendChild(btn('', bi('Handled', 'Разобрано'), function () { adminCall({ action: 'resolve', id: x.id }).then(function () { loadAdmin(false); }); }));
+      return row;
+    }));
+    if (staffRole === 'owner') {
+      $('adm-owner').hidden = false;
+      var s = await adminCall({ action: 'staff_list' });
+      if (s.ok) {
+        var box = $('adm-staff'); box.innerHTML = '';
+        (s.data.items || []).forEach(function (m) {
+          var row = el('div', 'mini', '<span><b>' + (m.username ? '@' + m.username : m.telegram_id) + '</b> · ' + (m.role === 'owner' ? t('owner', 'владелец') : t('manager', 'менеджер')) + '</span>');
+          if (m.role !== 'owner') {
+            var x = el('button', 'linkish', bi('Remove', 'Убрать')); x.type = 'button';
+            x.addEventListener('click', function () { ask('Remove this manager?', 'Убрать этого менеджера?', function () { adminCall({ action: 'staff_remove', telegram_id: m.telegram_id }).then(function () { loadAdmin(true); }); }); });
+            row.appendChild(x);
+          }
+          box.appendChild(row);
+        });
+      }
+    }
+  }
+  async function checkStaff() {
+    try {
+      var r = await adminCall({ action: 'whoami' });
+      if (!r.ok || !r.data.role) return;
+      staffRole = r.data.role;
+      $('tab-admin-btn').hidden = false; $('tabs').classList.add('has-admin');
+      await loadAdmin(false);
+      admTimer = setInterval(function () { loadAdmin(false); }, 8000);
+      if (/[?&]tab=admin/.test(location.search)) showTab('admin');
+    } catch (e) {}
+  }
+  $('adm-add').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var uname = $('adm-user').value.trim(); if (!uname) return;
+    var m = $('adm-msg'); m.hidden = true;
+    var r = await adminCall({ action: 'staff_add', username: uname });
+    if (r.ok) { $('adm-user').value = ''; loadAdmin(true); return; }
+    m.className = 'note bad'; m.hidden = false;
+    m.innerHTML = r.data.error === 'not found' ? bi('Not found. Ask this person to open the app once, then try again.', 'Не найден. Пусть человек один раз откроет приложение, затем повторите.') : bi('Could not add. Check the username.', 'Не удалось добавить. Проверьте имя пользователя.');
+  });
+
   /* ---------- start ---------- */
   document.querySelectorAll('.mindep').forEach(function (e) { e.textContent = MIN_DEPOSIT; });
   document.querySelectorAll('.minwd').forEach(function (e) { e.textContent = MIN_WITHDRAW; });
@@ -279,6 +425,7 @@
     return Promise.all([loadProfile(), loadAddress()]);
   }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;
+    checkStaff();
   }).catch(function () {
     splashError('Could not sign you in. Please reopen the app.', 'Не удалось войти. Откройте приложение заново.');
   });

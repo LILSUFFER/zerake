@@ -109,10 +109,11 @@
     opener.insertAdjacentHTML('beforeend', CHEVRON);
     opener.classList.add('logged');
   }
+  function fid(v) { var d = String(v || '').replace(/\D/g, ''); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, '$1-') : String(v || ''); }
   function showId(value) {
-    $('zid').value = value || '';
+    $('zid').value = value ? fid(value) : '';
     if (value) {
-      $('zidtext').textContent = value;
+      $('zidtext').textContent = fid(value);
       $('zidview').hidden = false; $('zform').hidden = true;
     } else {
       $('zidtext').textContent = '';
@@ -197,7 +198,7 @@
 
     $('zform').addEventListener('submit', async function (e) {
       e.preventDefault();
-      var id = $('zid').value.trim();
+      var id = $('zid').value.replace(/[\s-]/g, '');
       if (!/^[0-9]{5,10}$/.test(id)) { note($('zmsg2'), 'The ID must be 5–10 digits.', 'ID должен состоять из 5–10 цифр.', true); return; }
       var u = (await sb.auth.getUser()).data.user;
       var r = await sb.from('profiles').upsert({ user_id: u.id, gg_id: id, updated_at: new Date().toISOString() });

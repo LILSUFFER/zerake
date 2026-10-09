@@ -2,6 +2,7 @@
 // The request is checked here, saved as "pending", and every manager is alerted in Telegram.
 // A manager then confirms in ClubGG that the chips came back and pays the USDT.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const fid = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, "$1-") : String(v ?? ""); };   // 33833619 -> 3383-3619
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
 const ADDRESS: Record<string, RegExp> = {
@@ -88,7 +89,7 @@ Deno.serve(async (req: Request) => {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (botToken) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
-    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nOperation: ${ins.data.op_id}\nClubGG ID: ${profile.gg_id}\nPayout: ${net} USDT (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
+    const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nOperation: ${ins.data.op_id}\nClubGG ID: ${fid(profile.gg_id)}\nPayout: ${net} USDT (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
     for (const s of staff ?? []) {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },

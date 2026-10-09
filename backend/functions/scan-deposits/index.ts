@@ -6,6 +6,7 @@
 // Optional settings (Secrets): TRONGRID_API_KEY, TONCENTER_API_KEY (raise the free rate limits),
 // TELEGRAM_BOT_TOKEN (already set; used for staff and player messages).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const fid = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, "$1-") : String(v ?? ""); };   // 33833619 -> 3383-3619
 
 // ---- helpers (pure functions, unit-tested) ----
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -179,7 +180,7 @@ Deno.serve(async () => {
       const req = reqByTx.get(d.tx_hash)!;
       await notifyUser(d.user_id, `✅ Payment received: ${d.amount} USDT.\nWe are sending the chips to your ClubGG ID now.\nOperation: ${d.op_id}\n\n✅ Платёж получен: ${d.amount} USDT.\nСейчас отправим фишки на ваш ID в ClubGG.\nОперация: ${d.op_id}`);
       const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
-      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ?? "NOT SET"}\nPaid: ${d.amount} USDT (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
+      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.amount} USDT (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
     }
     let orphanNew = 0;
     if (orphans.length) {

@@ -4,6 +4,7 @@
 //   change  -> recovery code + new address: the change takes effect after 48 hours (cash outs frozen meanwhile).
 //              Returns a NEW recovery code (shown once) that replaces the old one when the change is done.
 //   cancel  -> cancel a pending change (no code needed: it only makes things safer)
+//   pin_set -> set / change the 6-digit app PIN;  pin_check -> unlock (5 wrong PINs lock it for 15 minutes)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
@@ -24,6 +25,10 @@ function newCode(): string {
 }
 function normCode(c: unknown): string {
   return String(c ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+}
+async function hashPin(userId: string, pin: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-pin:" + userId + ":" + String(pin)));
+  return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 async function hashCode(userId: string, code: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-recovery:" + userId + ":" + normCode(code)));
@@ -86,8 +91,8 @@ Deno.serve(async (req: Request) => {
   const state = async () => {
     const w = (await admin.from("player_wallets").select("chain,address").eq("user_id", uid)).data ?? [];
     const p = (await admin.from("wallet_changes").select("id,chain,old_address,new_address,method,effective_at,requested_at").eq("user_id", uid).eq("status", "pending").order("id")).data ?? [];
-    const sec = (await admin.from("player_security").select("user_id").eq("user_id", uid).maybeSingle()).data;
-    return { wallets: Object.fromEntries(w.map((x) => [x.chain, x.address])), pending: p, has_code: !!sec };
+    const sec = (await admin.from("player_security").select("code_hash,pin_hash").eq("user_id", uid).maybeSingle()).data;
+    return { wallets: Object.fromEntries(w.map((x) => [x.chain, x.address])), pending: p, has_code: !!sec?.code_hash, has_pin: !!sec?.pin_hash };
   };
 
   if (action === "status") return out(await state(), 200, h);
@@ -102,8 +107,8 @@ Deno.serve(async (req: Request) => {
     if (ins.error) return out({ error: /duplicate|unique/i.test(ins.error.message) ? "wallet taken" : "save failed" }, 409, h);
     // the very first bind creates the recovery code
     let code: string | null = null;
-    const sec = (await admin.from("player_security").select("user_id").eq("user_id", uid).maybeSingle()).data;
-    if (!sec) { code = newCode(); await admin.from("player_security").insert({ user_id: uid, code_hash: await hashCode(uid, code) }); }
+    const sec = (await admin.from("player_security").select("code_hash").eq("user_id", uid).maybeSingle()).data;
+    if (!sec?.code_hash) { code = newCode(); await admin.from("player_security").upsert({ user_id: uid, code_hash: await hashCode(uid, code), updated_at: new Date().toISOString() }); }
     return out({ ...(await state()), code }, 200, h);
   }
 
@@ -119,7 +124,7 @@ Deno.serve(async (req: Request) => {
     const taken = (await admin.from("player_wallets").select("user_id").eq("chain", chain).ilike("address", address).maybeSingle()).data;
     if (taken && taken.user_id !== uid) return out({ error: "wallet taken" }, 409, h);
     const sec = (await admin.from("player_security").select("code_hash,failed,failed_at").eq("user_id", uid).maybeSingle()).data;
-    if (!sec) return out({ error: "no code" }, 400, h);
+    if (!sec?.code_hash) return out({ error: "no code" }, 400, h);
     const recent = sec.failed_at && Date.now() - new Date(sec.failed_at).getTime() < 24 * 3600 * 1000;
     if (recent && sec.failed >= MAX_FAILED) return out({ error: "too many attempts" }, 429, h);
     if ((await hashCode(uid, String(body.code ?? ""))) !== sec.code_hash) {
@@ -138,12 +143,35 @@ Deno.serve(async (req: Request) => {
   }
 
   if (action === "newcode") {                      // after a change through support the old code is gone: make a new one
-    const sec = (await admin.from("player_security").select("user_id").eq("user_id", uid).maybeSingle()).data;
+    const sec = (await admin.from("player_security").select("code_hash").eq("user_id", uid).maybeSingle()).data;
     const w = (await admin.from("player_wallets").select("chain").eq("user_id", uid).limit(1)).data ?? [];
-    if (sec || !w.length) return out({ error: "not allowed" }, 400, h);
+    if (sec?.code_hash || !w.length) return out({ error: "not allowed" }, 400, h);
     const code = newCode();
-    await admin.from("player_security").insert({ user_id: uid, code_hash: await hashCode(uid, code) });
+    await admin.from("player_security").upsert({ user_id: uid, code_hash: await hashCode(uid, code), updated_at: new Date().toISOString() });
     return out({ ...(await state()), code }, 200, h);
+  }
+
+  // ---- app PIN ----
+  if (action === "pin_set" || action === "pin_check") {
+    const pin = String(body.pin ?? "");
+    if (!/^\d{6}$/.test(pin)) return out({ error: "bad pin" }, 400, h);
+    const sec = (await admin.from("player_security").select("pin_hash,pin_failed,pin_locked_until").eq("user_id", uid).maybeSingle()).data;
+    const locked = sec?.pin_locked_until && new Date(sec.pin_locked_until).getTime() > Date.now();
+    if (locked) return out({ error: "locked", until: sec!.pin_locked_until }, 429, h);
+    const check = async (p: string) => {
+      if (sec?.pin_hash && (await hashPin(uid, p)) === sec.pin_hash) { await admin.from("player_security").update({ pin_failed: 0 }).eq("user_id", uid); return true; }
+      const n = (sec?.pin_failed ?? 0) + 1;
+      await admin.from("player_security").update({ pin_failed: n >= 5 ? 0 : n, pin_locked_until: n >= 5 ? new Date(Date.now() + 15 * 60_000).toISOString() : null }).eq("user_id", uid);
+      return false;
+    };
+    if (action === "pin_check") {
+      if (!sec?.pin_hash) return out({ ok: true }, 200, h);
+      return (await check(pin)) ? out({ ok: true }, 200, h) : out({ error: "wrong pin", left: 5 - ((sec.pin_failed ?? 0) + 1) }, 403, h);
+    }
+    // pin_set: changing an existing PIN needs the old one
+    if (sec?.pin_hash && !(await check(String(body.old_pin ?? "")))) return out({ error: "wrong pin" }, 403, h);
+    await admin.from("player_security").upsert({ user_id: uid, pin_hash: await hashPin(uid, pin), pin_failed: 0, updated_at: new Date().toISOString() });
+    return out({ ...(await state()), ok: true }, 200, h);
   }
 
   if (action === "cancel") {

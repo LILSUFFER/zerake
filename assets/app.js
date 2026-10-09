@@ -179,7 +179,83 @@
       var wc = bin.charCodeAt(1); return tonFriendly((wc > 127 ? wc - 256 : wc) + ':' + hex);
     } catch (e) { return a; }
   }
-  var pending = [], hasCode = true;
+  var pending = [], hasCode = true, hasPin = false, sessionPin = '';
+  /* ---------- PIN and Face ID ---------- */
+  var bm = tg && tg.BiometricManager, bioReady = false;
+  function bioInit(cb) {
+    if (!bm || !bm.init) return cb && cb();
+    try { bm.init(function () { bioReady = true; cb && cb(); }); } catch (e) { cb && cb(); }
+  }
+  function bioCan() { return bioReady && bm.isBiometricAvailable; }
+  function bioName() { return bm && bm.biometricType === 'finger' ? t('fingerprint', 'отпечаток') : 'Face ID'; }
+  var lockMode = null, entry = '', firstPin = '', lockDone = null;
+  function paintDots() { document.querySelectorAll('#dots i').forEach(function (d, i) { d.classList.toggle('on', i < entry.length); }); }
+  function lockMsg(en, ru) { $('lockmsg').innerHTML = en ? bi(en, ru) : ''; }
+  function openLock(mode, done) {
+    lockMode = mode; entry = ''; firstPin = ''; lockDone = done; paintDots(); lockMsg('');
+    var titles = { unlock: ['Enter your PIN', 'Введите PIN-код'], set: ['Create a 6-digit PIN', 'Придумайте 6-значный PIN-код'], old: ['Enter your current PIN', 'Введите текущий PIN-код'], confirm: ['Enter the PIN for the cash out', 'Введите PIN-код для вывода'] };
+    $('locktitle').innerHTML = bi(titles[mode][0], titles[mode][1]);
+    $('kbio').disabled = !(mode === 'unlock' || mode === 'confirm') || !(bioCan() && bm.isBiometricTokenSaved);
+    $('kbio').textContent = bm && bm.biometricType === 'finger' ? '☝' : '🙂';
+    $('lockcancel').hidden = mode === 'unlock';
+    $('lock').hidden = false;
+    if ((mode === 'unlock' || mode === 'confirm') && !$('kbio').disabled) setTimeout(bioUnlock, 250);
+  }
+  function closeLock() { $('lock').hidden = true; lockMode = null; entry = ''; }
+  function shake() { var d = $('dots'); d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); haptic('error'); }
+  async function pinEntered(pin) {
+    if (lockMode === 'unlock' || lockMode === 'confirm') {
+      var r = await walletCall({ action: 'pin_check', pin: pin });
+      if (r.ok) { sessionPin = pin; haptic('success'); var d = lockDone; closeLock(); d && d(pin); return; }
+      entry = ''; paintDots(); shake();
+      if (r.data.error === 'locked') lockMsg('Too many wrong PINs. Try again in 15 minutes.', 'Слишком много неверных попыток. Попробуйте через 15 минут.');
+      else lockMsg('Wrong PIN. Attempts left: ' + r.data.left, 'Неверный PIN. Осталось попыток: ' + r.data.left);
+      return;
+    }
+    if (lockMode === 'old') { firstPin = ''; window.__oldPin = pin; lockMode = 'set'; entry = ''; paintDots(); $('locktitle').innerHTML = bi('Create a new 6-digit PIN', 'Придумайте новый 6-значный PIN-код'); return; }
+    if (lockMode === 'set' && !firstPin) { firstPin = pin; entry = ''; paintDots(); $('locktitle').innerHTML = bi('Repeat the PIN', 'Повторите PIN-код'); return; }
+    if (lockMode === 'set') {
+      if (pin !== firstPin) { firstPin = ''; entry = ''; paintDots(); shake(); $('locktitle').innerHTML = bi('PINs do not match. Create it again', 'PIN-коды не совпали. Придумайте заново'); return; }
+      var r2 = await walletCall({ action: 'pin_set', pin: pin, old_pin: window.__oldPin || '' });
+      window.__oldPin = '';
+      if (!r2.ok) { entry = ''; firstPin = ''; paintDots(); shake(); lockMsg('Could not save the PIN (wrong current PIN?).', 'Не удалось сохранить PIN (неверный текущий PIN?).'); lockMode = hasPin ? 'old' : 'set'; return; }
+      sessionPin = pin; hasPin = true; $('pinprompt').hidden = true; haptic('success'); closeLock();
+      offerBio(pin);
+    }
+  }
+  function offerBio(pin) {
+    if (!bioCan()) { try { tg.showAlert(t('PIN is set. It will be asked when the app opens and for cash outs.', 'PIN-код установлен. Его спросят при входе и при выводе.')); } catch (e) {} return; }
+    ask('Also unlock with ' + bioName() + '?', 'Входить также по ' + bioName() + '?', function () {
+      bm.requestAccess({ reason: t('Unlock Zerake', 'Вход в Zerake') }, function (granted) {
+        if (!granted) return;
+        bm.updateBiometricToken(pin, function (ok) { if (ok) { haptic('success'); try { tg.showAlert(bioName() + t(' is on.', ' включён.')); } catch (e) {} } });
+      });
+    });
+  }
+  function bioUnlock() {
+    if (!bioCan() || !bm.isBiometricTokenSaved) return;
+    bm.authenticate({ reason: t('Unlock Zerake', 'Вход в Zerake') }, function (ok, token) { if (ok && token && /^\d{6}$/.test(token)) pinEntered(token); });
+  }
+  document.querySelectorAll('#keypad button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.id === 'kbio') return bioUnlock();
+      if (b.classList.contains('k-del')) { entry = entry.slice(0, -1); paintDots(); return; }
+      if (entry.length >= 6) return;
+      entry += b.textContent; paintDots(); try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {}
+      if (entry.length === 6) { var p = entry; setTimeout(function () { pinEntered(p); }, 120); }
+    });
+  });
+  $('lockcancel').addEventListener('click', function () { var d = lockDone, m = lockMode; closeLock(); if (m === 'confirm' && d) d(null); });
+  $('pinsetup').addEventListener('click', function () { openLock('set'); });
+  $('pinlater').addEventListener('click', function () { $('pinprompt').hidden = true; try { sessionStorage.setItem('zerake-pinlater', '1'); } catch (e) {} });
+  $('secbtn').addEventListener('click', function () { openLock(hasPin ? 'old' : 'set'); });
+  function askPinIfNeeded(d) {
+    hasPin = !!d.has_pin;
+    var later = false; try { later = !!sessionStorage.getItem('zerake-pinlater'); } catch (e) {}
+    $('pinprompt').hidden = hasPin || later;
+    if (hasPin && !sessionPin && !lockMode) bioInit(function () { openLock('unlock'); });
+    else bioInit();
+  }
   async function walletCall(body) {
     var ses = (await sb.auth.getSession()).data.session;
     var r = await fetch(C.supabaseUrl + '/functions/v1/wallet', {
@@ -192,6 +268,7 @@
   function takeState(d) {
     if (!d || !d.wallets) return;
     wallets = d.wallets; pending = d.pending || []; hasCode = !!d.has_code; walletsLoaded = true;
+    if (d.has_pin !== undefined && !window.__pinAsked) { window.__pinAsked = 1; askPinIfNeeded(d); }
     applyWallet(); paintPending();
     if (d.code) showCode(d.code);
   }
@@ -341,12 +418,13 @@
     if (!ggId) { wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true); return; }
     if (!(amount >= MIN_WITHDRAW)) { wmsg('Minimum withdrawal is ' + MIN_WITHDRAW + ' USDT.', 'Минимальный вывод: ' + MIN_WITHDRAW + ' USDT.', true); return; }
     if (!ADDR_RE[net].test(address)) { wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true); return; }
+    if (hasPin && !sessionPin) { openLock('confirm', function (p) { if (p) $('wform').requestSubmit(); }); return; }
     $('wsubmit').disabled = true;
     var ses = (await sb.auth.getSession()).data.session;
     var res = await fetch(C.supabaseUrl + '/functions/v1/create-withdrawal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + ses.access_token },
-      body: JSON.stringify({ network: net, address: address, amount: $('wamt').value })
+      body: JSON.stringify({ network: net, address: address, amount: $('wamt').value, pin: sessionPin })
     });
     var rd = {}; try { rd = await res.json(); } catch (x) {}
     $('wsubmit').disabled = false;
@@ -356,6 +434,8 @@
       else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
       else if (rd.error === 'below fee') wmsg('The amount is too small to cover the fee (' + rd.fee + ' USDT).', 'Сумма слишком мала, чтобы покрыть комиссию (' + rd.fee + ' USDT).', true);
       else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
+      else if (rd.error === 'wrong pin') { sessionPin = ''; wmsg('Wrong PIN. Try again.', 'Неверный PIN-код. Попробуйте ещё раз.', true); }
+      else if (rd.error === 'pin locked') wmsg('Too many wrong PINs. Try again in 15 minutes.', 'Слишком много неверных PIN. Попробуйте через 15 минут.', true);
       else if (rd.error === 'wallet change pending') wmsg('A wallet change is waiting: cash outs are frozen until ' + new Date(rd.until).toLocaleString() + '.', 'Идёт смена кошелька: выводы заморожены до ' + new Date(rd.until).toLocaleString('ru-RU') + '.', true);
       else if (rd.error === 'address not allowed' || rd.error === 'no bound wallet') wmsg('Cash outs go only to your bound wallet on this network.', 'Вывод возможен только на ваш привязанный кошелёк в этой сети.', true);
       else if (rd.error === 'same way') {

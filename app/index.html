@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=26">
+<link rel="stylesheet" href="../assets/app.css?v=27">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -33,6 +33,13 @@
     <button type="button" data-net="TON"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#fff" d="M17.9 17.4v0c-.1 0-.7.1-1.9.1-1 0-1.7 0-1.9-.1v0c-3.7-.2-6.4-.8-6.4-1.6s2.7-1.4 6.4-1.6v2.5c.2 0 .9.1 1.9.1 1.2 0 1.8-.1 1.9-.1v-2.5c3.7.2 6.4.8 6.4 1.6s-2.7 1.4-6.4 1.6m0-3.4v-2.3h5.2V8.3H8.9v3.4h5.2V14c-4.2.2-7.3 1-7.3 2s3.1 1.8 7.3 2v7.2h3.8V18c4.2-.2 7.3-1 7.3-2s-3.1-1.8-7.3-2"/></svg><svg class="n" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0098EA"/><path fill="#fff" d="M21.6 9H10.4c-2 0-3.3 2.2-2.3 4l6.9 12c.4.8 1.6.8 2 0l6.9-12c1-1.8-.3-4-2.3-4zm-6.6 12.5l-1.5-2.9-3.6-6.4c-.2-.4.1-.9.5-.9h4.6zm7.6-9.3l-3.6 6.4-1.5 2.9v-10.2h4.6c.4 0 .7.5.5.9z"/></svg></span><span class="nn"><b>TON</b><small><span class="en">USDT on TON</span><span class="ru">USDT в TON</span></small></span></button>
     <button type="button" data-net="GRAM"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0098EA"/><path fill="#fff" d="M21.6 9H10.4c-2 0-3.3 2.2-2.3 4l6.9 12c.4.8 1.6.8 2 0l6.9-12c1-1.8-.3-4-2.3-4zm-6.6 12.5l-1.5-2.9-3.6-6.4c-.2-.4.1-.9.5-.9h4.6zm7.6-9.3l-3.6 6.4-1.5 2.9v-10.2h4.6c.4 0 .7.5.5.9z"/></svg></span><span class="nn"><b>GRAM</b><small><span class="en">TON coin</span><span class="ru">Монета TON</span></small></span></button>
   </div>
+
+  <!-- ask to protect the app -->
+  <section id="pinprompt" class="card warnbox" hidden>
+    <b class="ctitle">🔒 <span class="en">Protect your account</span><span class="ru">Защитите аккаунт</span></b>
+    <p class="payhint"><span class="en">Set a 6-digit PIN (and Face ID / fingerprint if your phone has it). It is asked when the app opens and for every cash out.</span><span class="ru">Установите 6-значный PIN-код (и Face ID / отпечаток, если телефон умеет). Его спросят при входе и при каждом выводе.</span></p>
+    <div class="tbtns two"><button class="btn primary" id="pinsetup" type="button"><span class="en">Set PIN</span><span class="ru">Установить PIN</span></button><button class="btn" id="pinlater" type="button"><span class="en">Later</span><span class="ru">Позже</span></button></div>
+  </section>
 
   <!-- a wallet change is waiting -->
   <section id="pendbox" class="card warnbox" hidden>
@@ -249,9 +256,26 @@
 
   <footer class="foot">
     <button class="linkbtn" id="lang" type="button">RU</button>
+    <button class="linkbtn" id="secbtn" type="button">🔒 <span class="en">PIN &amp; Face ID</span><span class="ru">PIN и Face ID</span></button>
     <span class="muted">zerake.com</span>
   </footer>
 </main>
+
+<div id="lock" class="lock" hidden>
+  <div class="lockin">
+    <div class="logo big">Z</div>
+    <b class="locktitle" id="locktitle"></b>
+    <div class="dots" id="dots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="lockmsg" id="lockmsg"></p>
+    <div class="keypad" id="keypad">
+      <button type="button">1</button><button type="button">2</button><button type="button">3</button>
+      <button type="button">4</button><button type="button">5</button><button type="button">6</button>
+      <button type="button">7</button><button type="button">8</button><button type="button">9</button>
+      <button type="button" class="k-bio" id="kbio" aria-label="Face ID">🙂</button><button type="button">0</button><button type="button" class="k-del" aria-label="Delete">⌫</button>
+    </div>
+    <button class="linkish" type="button" id="lockcancel" hidden><span class="en">Cancel</span><span class="ru">Отмена</span></button>
+  </div>
+</div>
 
 <div id="codebox" class="overlay" hidden>
   <div class="card codecard">
@@ -273,6 +297,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=26"></script>
+<script src="../assets/app.js?v=27"></script>
 </body>
 </html>

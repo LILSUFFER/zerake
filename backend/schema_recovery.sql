@@ -6,7 +6,10 @@
 
 create table if not exists public.player_security (
   user_id        uuid primary key references auth.users (id) on delete cascade,
-  code_hash      text not null,
+  code_hash      text,                       -- recovery code (hash); null after a change through support
+  pin_hash       text,                       -- 6-digit app PIN (hash)
+  pin_failed     int  not null default 0,
+  pin_locked_until timestamptz,
   failed         int  not null default 0,
   failed_at      timestamptz,
   created_at     timestamptz not null default now(),
@@ -46,7 +49,7 @@ begin
     if r.new_code_hash is not null then
       update public.player_security set code_hash = r.new_code_hash, failed = 0, updated_at = now() where user_id = r.user_id;
     elsif r.method = 'support' then
-      delete from public.player_security where user_id = r.user_id;   -- the lost code dies; the player makes a new one in the app
+      update public.player_security set code_hash = null, failed = 0, updated_at = now() where user_id = r.user_id;   -- the lost code dies
     end if;
     update public.wallet_changes set status = 'done', closed_at = now() where id = r.id;
     insert into public.ops_log (op_id, kind, event, status, actor_id, actor_name, row_data)

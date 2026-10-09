@@ -112,6 +112,19 @@ Deno.serve(async (req: Request) => {
   const profile = (await admin.from("profiles").select("gg_id").eq("user_id", u.user.id).maybeSingle()).data;
   if (!profile?.gg_id) return out({ error: "no clubgg id" }, 400, h);
 
+  // PIN: if the player set one, every cash out needs it
+  const sec = (await admin.from("player_security").select("pin_hash,pin_failed,pin_locked_until").eq("user_id", u.user.id).maybeSingle()).data;
+  if (sec?.pin_hash) {
+    if (sec.pin_locked_until && new Date(sec.pin_locked_until).getTime() > Date.now()) return out({ error: "pin locked" }, 429, h);
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("zerake-pin:" + u.user.id + ":" + String(body.pin ?? "")));
+    const hash = Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
+    if (hash !== sec.pin_hash) {
+      const n = (sec.pin_failed ?? 0) + 1;
+      await admin.from("player_security").update({ pin_failed: n >= 5 ? 0 : n, pin_locked_until: n >= 5 ? new Date(Date.now() + 15 * 60_000).toISOString() : null }).eq("user_id", u.user.id);
+      return out({ error: "wrong pin" }, 403, h);
+    }
+  }
+
   // 0) A wallet change is waiting (48 h with the code, 7 days through support): cash outs are frozen.
   await admin.rpc("apply_wallet_changes");
   const pendingChange = (await admin.from("wallet_changes").select("effective_at").eq("user_id", u.user.id).eq("status", "pending").limit(1)).data ?? [];

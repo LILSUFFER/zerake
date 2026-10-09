@@ -286,3 +286,21 @@ body:not(.nobind) #bindcard, #tab-deposit:not(.st-form) #bindcard { display: non
 .bigcode { font: 600 26px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .12em; color: var(--green); padding: 14px 18px; border-radius: var(--r-md); background: var(--card-2); border: 1px dashed var(--green-line); user-select: all; }
 .codecard .chk { text-align: left; }
 .chgform { padding: 14px; border-radius: var(--r-md); background: var(--card-2); border: 1px solid var(--line); }
+
+.lock { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: grid; place-items: center; padding: 24px 18px; }
+.lock::before { content: ""; position: absolute; inset: 0 0 auto; height: 50vh; background: radial-gradient(60% 55% at 50% 0%, rgba(25,197,143,.14), transparent 70%); pointer-events: none; }
+.lockin { position: relative; display: grid; justify-items: center; gap: 16px; width: 100%; max-width: 320px; }
+.logo.big { width: 54px; height: 54px; border-radius: 16px; font-size: 26px; }
+.locktitle { font-size: 19px; font-weight: 500; text-align: center; }
+.dots { display: flex; gap: 14px; margin: 4px 0; }
+.dots i { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--line-2); transition: background .12s, border-color .12s; }
+.dots i.on { background: var(--green); border-color: var(--green); }
+.dots.shake { animation: shake .35s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.lockmsg { margin: 0; min-height: 20px; color: var(--red); font-size: 13px; text-align: center; }
+.keypad { display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px; }
+.keypad button { width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 500 26px Geist, sans-serif; cursor: pointer; transition: background .1s; }
+.keypad button:active { background: var(--card-3); }
+.keypad .k-bio, .keypad .k-del { background: none; border-color: transparent; font-size: 24px; }
+.keypad .k-bio[disabled] { visibility: hidden; }
+.foot { gap: 8px; }

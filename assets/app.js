@@ -140,6 +140,9 @@
     if (!rows.length) { var e = document.createElement('div'); e.className = 'empty'; e.innerHTML = bi('Nothing here yet.', 'Пока пусто.'); box.appendChild(e); return; }
     rows.forEach(function (x) {
       var el = document.createElement('div'); el.className = 'item';
+      var ic = document.createElement('div'); ic.className = 'ic' + (x.kind === 'dep' ? '' : ' out');
+      ic.innerHTML = x.kind === 'dep' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+      el.appendChild(ic);
       var left = document.createElement('div');
       var title = document.createElement('div'); title.innerHTML = x.kind === 'dep' ? bi('Deposit', 'Депозит') : bi('Withdrawal', 'Вывод');
       var date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (x.network || 'TRC20');
@@ -163,11 +166,12 @@
     var box = $('wfee'); if (!box) return;
     var chips = Number(String($('wamt').value).replace(',', '.'));
     var f = WD_FEE[net] || [0, 0];
-    if (!f[0] && !f[1]) { box.innerHTML = bi('No fee on this network.', 'В этой сети без комиссии.'); return; }
-    var rule = (f[0] ? f[0] + ' USDT' : '') + (f[0] && f[1] ? ' + ' : '') + (f[1] ? f[1] + '%' : '');
-    if (!(chips > 0)) { box.innerHTML = bi('Network fee: ' + rule + '.', 'Комиссия сети: ' + rule + '.'); return; }
-    var fee = wdFee(net, chips), get = Math.max(0, Math.round((chips - fee) * 100) / 100);
-    box.innerHTML = bi('Fee ' + fee + ' USDT (' + rule + '). You get <b>' + get + ' USDT</b>.', 'Комиссия ' + fee + ' USDT (' + rule + '). Вы получите <b>' + get + ' USDT</b>.');
+    var rule = f[0] || f[1] ? (f[0] ? f[0] + ' USDT' : '') + (f[0] && f[1] ? ' + ' : '') + (f[1] ? f[1] + '%' : '') : t('no fee', 'без комиссии');
+    var fee = chips > 0 ? wdFee(net, chips) : 0, get = chips > 0 ? Math.max(0, Math.round((chips - fee) * 100) / 100) : 0;
+    box.innerHTML =
+      '<div class="row"><span>' + bi('Chips', 'Фишки') + '</span><span>' + (chips > 0 ? chips : '—') + '</span></div>' +
+      '<div class="row"><span>' + bi('Network fee', 'Комиссия сети') + ' · ' + rule + '</span><span>' + (chips > 0 ? (fee ? '−' + fee : '0') : '—') + '</span></div>' +
+      '<div class="row total"><span>' + bi('You get', 'Вы получите') + '</span><b>' + (chips > 0 ? get + ' USDT' : '—') + '</b></div>';
   }
   $('wamt').addEventListener('input', feePreview);
   $('wform').addEventListener('submit', async function (e) {
@@ -270,6 +274,7 @@
     function paint() {
       var left = end - Date.now();
       $('rv-timer').textContent = fmt(left);
+      var bar = $('rv-bar'); if (bar) { bar.style.width = Math.max(0, Math.min(100, left / (30 * 60000) * 100)) + '%'; bar.style.background = left < 5 * 60000 ? 'var(--amber)' : ''; }
       if (left <= 0 && curReq && curReq.request_no === r.request_no && !curReq.paid) setReqStatus('expired');
     }
     paint(); tick = setInterval(paint, 1000); poll = setInterval(checkPaid, 8000);
@@ -289,6 +294,9 @@
       }
     }
   }
+  document.querySelectorAll('[data-quick]').forEach(function (b) {
+    b.addEventListener('click', function () { $('reqamt').value = b.dataset.quick; try { tg.HapticFeedback.selectionChanged(); } catch (e) {} });
+  });
   $('reqform').addEventListener('submit', async function (e) {
     e.preventDefault();
     if (!ggId) { reqErr('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.'); return; }
@@ -569,7 +577,8 @@
   signIn().then(function (user) {
     me = user;
     var u = tg.initDataUnsafe && tg.initDataUnsafe.user;
-    $('who').textContent = u ? (u.username ? '@' + u.username : (u.first_name || '')) : '';
+    var nm = u ? (u.username ? '@' + u.username : (u.first_name || '')) : '';
+    if (nm) { var w = $('who'); w.innerHTML = '<span class="ava"></span><span class="nm"></span>'; w.firstChild.textContent = (u.first_name || u.username || '?').charAt(0).toUpperCase(); w.lastChild.textContent = nm; }
     return Promise.all([loadProfile(), loadAddress()]);
   }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;

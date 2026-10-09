@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=15">
+<link rel="stylesheet" href="../assets/app.css?v=17">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -16,26 +16,26 @@
 
 <main id="app" hidden>
   <header class="top">
-    <h1>Zerake</h1>
+    <div class="brand"><div class="logo">Z</div><h1>Zerake</h1></div>
     <div class="who" id="who"></div>
   </header>
 
   <nav class="tabs" role="tablist" id="tabs">
-    <button role="tab" data-tab="deposit" class="on"><span class="en">Deposit</span><span class="ru">Депозит</span></button>
-    <button role="tab" data-tab="withdraw"><span class="en">Withdraw</span><span class="ru">Вывод</span></button>
-    <button role="tab" data-tab="history"><span class="en">History</span><span class="ru">История</span></button>
-    <button role="tab" data-tab="admin" id="tab-admin-btn" hidden><span class="en">Queue</span><span class="ru">Заявки</span><i class="badge" id="adm-badge" hidden>0</i></button>
+    <button role="tab" data-tab="deposit" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg><span class="en">Deposit</span><span class="ru">Депозит</span></button>
+    <button role="tab" data-tab="withdraw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span class="en">Cash out</span><span class="ru">Вывод</span></button>
+    <button role="tab" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="en">History</span><span class="ru">История</span></button>
+    <button role="tab" data-tab="admin" id="tab-admin-btn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg><span class="en">Queue</span><span class="ru">Заявки</span><i class="badge" id="adm-badge" hidden>0</i></button>
   </nav>
 
   <div class="nets" id="nets">
-    <button type="button" data-net="TRC20" class="on">USDT · TRC20</button>
-    <button type="button" data-net="BEP20">USDT · BEP20</button>
-    <button type="button" data-net="TON">USDT · TON</button>
+    <button type="button" data-net="TRC20" class="on"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#fff" d="M17.9 17.4v0c-.1 0-.7.1-1.9.1-1 0-1.7 0-1.9-.1v0c-3.7-.2-6.4-.8-6.4-1.6s2.7-1.4 6.4-1.6v2.5c.2 0 .9.1 1.9.1 1.2 0 1.8-.1 1.9-.1v-2.5c3.7.2 6.4.8 6.4 1.6s-2.7 1.4-6.4 1.6m0-3.4v-2.3h5.2V8.3H8.9v3.4h5.2V14c-4.2.2-7.3 1-7.3 2s3.1 1.8 7.3 2v7.2h3.8V18c4.2-.2 7.3-1 7.3-2s-3.1-1.8-7.3-2"/></svg><svg class="n" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#EB0029"/><path fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M8 9l15 3-8 13z M8 9l7 16 M23 12l-15-3 7 7z"/></svg></span><span class="nn"><b>TRC20</b><small><span class="en">Tron network</span><span class="ru">Сеть Tron</span></small></span></button>
+    <button type="button" data-net="BEP20"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#fff" d="M17.9 17.4v0c-.1 0-.7.1-1.9.1-1 0-1.7 0-1.9-.1v0c-3.7-.2-6.4-.8-6.4-1.6s2.7-1.4 6.4-1.6v2.5c.2 0 .9.1 1.9.1 1.2 0 1.8-.1 1.9-.1v-2.5c3.7.2 6.4.8 6.4 1.6s-2.7 1.4-6.4 1.6m0-3.4v-2.3h5.2V8.3H8.9v3.4h5.2V14c-4.2.2-7.3 1-7.3 2s3.1 1.8 7.3 2v7.2h3.8V18c4.2-.2 7.3-1 7.3-2s-3.1-1.8-7.3-2"/></svg><svg class="n" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#F3BA2F"/><path fill="#fff" d="M12.1 14.3L16 10.4l3.9 3.9 2.3-2.3L16 5.8 9.8 12zM5.8 16l2.3-2.3 2.3 2.3-2.3 2.3zM12.1 17.7L16 21.6l3.9-3.9 2.3 2.3L16 26.2 9.8 20zM21.6 16l2.3-2.3 2.3 2.3-2.3 2.3zM18.3 16L16 13.7 13.7 16 16 18.3z"/></svg></span><span class="nn"><b>BEP20</b><small><span class="en">BNB Chain · low fee</span><span class="ru">BNB Chain · дёшево</span></small></span></button>
+    <button type="button" data-net="TON"><span class="tok"><svg class="u" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#fff" d="M17.9 17.4v0c-.1 0-.7.1-1.9.1-1 0-1.7 0-1.9-.1v0c-3.7-.2-6.4-.8-6.4-1.6s2.7-1.4 6.4-1.6v2.5c.2 0 .9.1 1.9.1 1.2 0 1.8-.1 1.9-.1v-2.5c3.7.2 6.4.8 6.4 1.6s-2.7 1.4-6.4 1.6m0-3.4v-2.3h5.2V8.3H8.9v3.4h5.2V14c-4.2.2-7.3 1-7.3 2s3.1 1.8 7.3 2v7.2h3.8V18c4.2-.2 7.3-1 7.3-2s-3.1-1.8-7.3-2"/></svg><svg class="n" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#0098EA"/><path fill="#fff" d="M21.6 9H10.4c-2 0-3.3 2.2-2.3 4l6.9 12c.4.8 1.6.8 2 0l6.9-12c1-1.8-.3-4-2.3-4zm-6.6 12.5l-1.5-2.9-3.6-6.4c-.2-.4.1-.9.5-.9h4.6zm7.6-9.3l-3.6 6.4-1.5 2.9v-10.2h4.6c.4 0 .7.5.5.9z"/></svg></span><span class="nn"><b>TON</b><small><span class="en">TON network</span><span class="ru">Сеть TON</span></small></span></button>
   </div>
 
   <!-- ClubGG ID banner (shown until the player adds an ID) -->
   <section id="noid" class="card warn" hidden>
-    <b><span class="en">Add your ClubGG ID first</span><span class="ru">Сначала добавьте ID в ClubGG</span></b>
+    <b class="ctitle"><span class="en">Add your ClubGG ID first</span><span class="ru">Сначала добавьте ID в ClubGG</span></b>
     <p>
       <span class="en">We send chips to this ID. Open zerake.com in your browser, sign in and enter it in the account menu.</span>
       <span class="ru">Фишки отправляются на этот ID. Откройте zerake.com в браузере, войдите и введите его в меню аккаунта.</span>
@@ -45,16 +45,20 @@
 
   <!-- Deposit -->
   <section id="tab-deposit" class="pane st-form">
-
-    <!-- TRC20: a deposit request (exact amount, 30 minutes) -->
     <div id="trc-flow" class="stack">
       <form class="card" id="reqform" autocomplete="off">
-        <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b id="req-net">USDT · TRC20</b></div>
-        <div class="row"><span class="muted"><span class="en">Chips go to ID</span><span class="ru">Фишки придут на ID</span></span><b class="green" id="dep-id2">—</b></div>
-        <label for="reqamt"><span class="en">Amount, USDT</span><span class="ru">Сумма, USDT</span></label>
-        <input id="reqamt" inputmode="decimal" value="50" placeholder="50">
+        <div class="row">
+          <h2 class="ctitle"><span class="en">Get chips</span><span class="ru">Пополнить фишки</span></h2>
+          <span class="pill" id="req-net">USDT · TRC20</span>
+        </div>
+        <label for="reqamt"><span class="en">Amount</span><span class="ru">Сумма</span></label>
+        <div class="money"><input id="reqamt" inputmode="decimal" value="50" placeholder="50"><span class="cur">USDT</span></div>
+        <div class="quick" id="quick">
+          <button type="button" data-quick="25">25</button><button type="button" data-quick="50">50</button><button type="button" data-quick="100">100</button><button type="button" data-quick="250">250</button><button type="button" data-quick="500">500</button>
+        </div>
+        <div class="fieldrow"><span class="muted"><span class="en">Chips go to ClubGG ID</span><span class="ru">Фишки придут на ID в ClubGG</span></span><span class="pill g" id="dep-id2">—</span></div>
         <p class="note" id="reqmsg" hidden></p>
-        <button class="btn primary" type="submit" id="reqbtn"><span class="en">Create deposit request</span><span class="ru">Создать заявку на депозит</span></button>
+        <button class="btn primary" type="submit" id="reqbtn"><span class="en">Create deposit request</span><span class="ru">Создать заявку</span></button>
       </form>
 
       <div id="req-view" class="stack" hidden>
@@ -64,68 +68,84 @@
           <p class="paidsub" id="rv-paid-sub"></p>
         </div>
         <div class="card" id="rv-details">
-          <p class="payhint"><span class="en">Send exactly this amount on the <b class="netname">TRC20</b> network. Do not round it.</span><span class="ru">Отправьте ровно эту сумму в сети <b class="netname">TRC20</b>. Не округляйте её.</span></p>
-          <div class="row"><span class="muted"><span class="en">Request number</span><span class="ru">Номер заявки</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
-          <div class="mono" id="rv-no">—</div>
-          <div class="row"><span class="muted"><span class="en">Token</span><span class="ru">Токен</span></span><b>Tether USDT</b></div>
-          <div class="row"><span class="muted"><span class="en">Network</span><span class="ru">Сеть</span></span><b class="netname">TRC20</b></div>
-
-          <div class="row"><span class="muted"><span class="en">Wallet address</span><span class="ru">Адрес кошелька</span></span><button class="chip" type="button" data-copy-from="rv-addr"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
-          <div class="addr" id="rv-addr">—</div>
-
-          <div class="row"><span class="muted"><span class="en">Exact amount to send</span><span class="ru">Точная сумма перевода</span></span><button class="chip" type="button" data-copy-from="rv-amt"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
-          <div class="amt"><span id="rv-amt">—</span> <small>USDT</small></div>
-
-          <div class="only-ton">
-            <div class="row"><span class="muted"><span class="en">Comment (recommended)</span><span class="ru">Комментарий (желательно)</span></span><button class="chip" type="button" data-copy-from="rv-no"><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
-            <p class="payhint"><span class="en">Paste the request number as the transfer comment. It helps us find your payment even if the amount is rounded.</span><span class="ru">Вставьте номер заявки в комментарий к переводу. Это поможет найти платёж, даже если сумма будет округлена.</span></p>
+          <div class="row">
+            <h2 class="ctitle"><span class="en">Send the payment</span><span class="ru">Оплатите заявку</span></h2>
+            <span class="pill">USDT · <b class="netname" style="font-weight:500">TRC20</b></span>
           </div>
-
-          <div class="qr" id="rv-qr"></div>
-
-          <div class="row"><span class="muted"><span class="en">Valid for</span><span class="ru">Действителен</span></span><b id="rv-timer">30:00</b></div>
+          <div class="reqgrid">
+            <div class="qrbox">
+              <div class="qr" id="rv-qr"></div>
+              <div class="qrcap"><span class="en">Scan with your wallet</span><span class="ru">Отсканируйте кошельком</span></div>
+            </div>
+            <div class="stack">
+              <div class="kv">
+                <div class="k"><span><span class="en">Exact amount</span><span class="ru">Точная сумма</span></span></div>
+                <div class="amtbox"><div class="amt"><span id="rv-amt">—</span><small>USDT</small></div><button class="chip" type="button" data-copy-from="rv-amt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+              </div>
+              <div class="kv">
+                <div class="k"><span><span class="en">Address</span><span class="ru">Адрес</span> · <span class="netname">TRC20</span></span></div>
+                <div class="addrbox"><div class="addr" id="rv-addr">—</div><button class="chip" type="button" data-copy-from="rv-addr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+              </div>
+              <div class="tonbox only-ton">
+                <div class="row"><b style="font-weight:500"><span class="en">Comment</span><span class="ru">Комментарий</span></b><button class="chip" type="button" data-copy-from="rv-no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+                <p class="payhint"><span class="en">Paste the request number as the transfer comment.</span><span class="ru">Вставьте номер заявки в комментарий к переводу.</span></p>
+              </div>
+            </div>
+          </div>
+          <p class="payhint"><span class="en">Send <b>exactly</b> this amount on <b class="netname">TRC20</b>. Do not round it: the tail identifies your payment.</span><span class="ru">Отправьте <b>ровно</b> эту сумму в сети <b class="netname">TRC20</b>. Не округляйте: по «хвосту» мы узнаём ваш платёж.</span></p>
+          <div class="timer">
+            <div class="row"><span class="muted"><span class="en">Request is valid for</span><span class="ru">Заявка действует ещё</span></span><b id="rv-timer">30:00</b></div>
+            <div class="bar"><i id="rv-bar"></i></div>
+          </div>
           <p class="note" id="rv-status"><span class="en">Waiting for your payment…</span><span class="ru">Ждём ваш платёж…</span></p>
+          <div class="reqno"><span><span class="en">Request</span><span class="ru">Заявка</span> <span class="mono" id="rv-no">—</span></span><button class="chip" type="button" data-copy-from="rv-no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
         </div>
         <button class="btn" id="rv-new" type="button"><span class="en">Create a new request</span><span class="ru">Создать новую заявку</span></button>
       </div>
     </div>
 
     <ol class="steps">
-      <li><span class="en">Enter the amount and create a request. You get an address and an <b>exact amount</b>.</span><span class="ru">Введите сумму и создайте заявку. Вы получите адрес и <b>точную сумму</b>.</span></li>
-      <li><span class="en">Send <b>exactly that amount</b> of USDT on the <b class="netname">TRC20</b> network within 30 minutes. The small tail of the amount identifies your payment, so do not round it.</span><span class="ru">Отправьте <b>ровно эту сумму</b> USDT в сети <b class="netname">TRC20</b> в течение 30 минут. Небольшой «хвост» суммы опознаёт ваш платёж, поэтому не округляйте её.</span></li>
-      <li><span class="en">Minimum deposit: <b class="mindep">10</b> USDT.</span><span class="ru">Минимальный депозит: <b class="mindep">10</b> USDT.</span></li>
-      <li><span class="en">Once the transfer is confirmed, we send chips to your ClubGG ID.</span><span class="ru">После подтверждения перевода мы отправим фишки на ваш ID в ClubGG.</span></li>
+      <li><span><span class="en">Enter the amount and create a request. You get an address and an <b>exact amount</b>.</span><span class="ru">Введите сумму и создайте заявку. Вы получите адрес и <b>точную сумму</b>.</span></span></li>
+      <li><span><span class="en">Send <b>exactly that amount</b> of USDT on <b class="netname">TRC20</b> within 30 minutes.</span><span class="ru">Отправьте <b>ровно эту сумму</b> USDT в сети <b class="netname">TRC20</b> в течение 30 минут.</span></span></li>
+      <li><span><span class="en">Once the transfer is confirmed, chips are sent to your ClubGG ID. Minimum <b class="mindep">10</b> USDT.</span><span class="ru">После подтверждения перевода фишки придут на ваш ID в ClubGG. Минимум <b class="mindep">10</b> USDT.</span></span></li>
     </ol>
-    <p class="hint only-trc"><span class="en">The sender pays the network fee. Sending from an exchange to TRC20 usually costs a few dollars.</span><span class="ru">Комиссию сети платит отправитель. Перевод с биржи в сети TRC20 обычно стоит несколько долларов.</span></p>
-    <p class="hint only-bep"><span class="en">The sender pays the network fee. BEP20 transfers usually cost a few cents.</span><span class="ru">Комиссию сети платит отправитель. Переводы в сети BEP20 обычно стоят несколько центов.</span></p>
-    <p class="hint only-ton"><span class="en">The sender pays the network fee, usually a fraction of a cent. Your wallet may need a little TON for it.</span><span class="ru">Комиссию сети платит отправитель, обычно доли цента. Кошельку может понадобиться немного TON на комиссию.</span></p>
-    <p class="hint warnx"><span class="en">Sending other coins or using another network means the funds are lost.</span><span class="ru">Другие монеты или другая сеть приведут к потере средств.</span></p>
+    <div class="hints">
+      <p class="hint only-trc"><span class="en">The sender pays the network fee. From an exchange on TRC20 it is usually a few dollars.</span><span class="ru">Комиссию сети платит отправитель. С биржи в TRC20 это обычно несколько долларов.</span></p>
+      <p class="hint only-bep"><span class="en">The sender pays the network fee. On BEP20 it is a few cents.</span><span class="ru">Комиссию сети платит отправитель. В BEP20 это несколько центов.</span></p>
+      <p class="hint only-ton"><span class="en">The sender pays the network fee, a fraction of a cent. Keep a little TON in the wallet.</span><span class="ru">Комиссию сети платит отправитель, доли цента. Держите немного TON на кошельке.</span></p>
+      <p class="hint warnx"><span>⚠</span><span><span class="en">Only USDT, only on the selected network. Other coins or networks mean the funds are lost.</span><span class="ru">Только USDT и только в выбранной сети. Другие монеты или сети приведут к потере средств.</span></span></p>
+    </div>
   </section>
 
   <!-- Withdraw -->
   <section id="tab-withdraw" class="pane" hidden>
     <form class="card" id="wform" autocomplete="off">
-      <div class="row"><span class="muted"><span class="en">Chips from ID</span><span class="ru">Фишки с ID</span></span><b class="green" id="wd-id">—</b></div>
+      <div class="row">
+        <h2 class="ctitle"><span class="en">Cash out</span><span class="ru">Вывести фишки</span></h2>
+        <span class="pill">USDT · <b class="netname" style="font-weight:500">TRC20</b></span>
+      </div>
+      <label for="wamt"><span class="en">Chips to cash out</span><span class="ru">Сколько фишек вывести</span></label>
+      <div class="money"><input id="wamt" inputmode="decimal" placeholder="50"><span class="cur">USDT</span></div>
 
-      <label for="wamt"><span class="en">Amount, USDT</span><span class="ru">Сумма, USDT</span></label>
-      <input id="wamt" inputmode="decimal" placeholder="50">
+      <label for="waddr"><span class="en">Your <span class="netname">TRC20</span> wallet address</span><span class="ru">Адрес вашего кошелька <span class="netname">TRC20</span></span></label>
+      <input id="waddr" placeholder="T..." spellcheck="false" autocapitalize="off" style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
 
-      <label for="waddr"><span class="en"><span class="netname">TRC20</span> address</span><span class="ru">Адрес <span class="netname">TRC20</span></span></label>
-      <input id="waddr" placeholder="T..." spellcheck="false" autocapitalize="off">
-
-      <p class="hint" id="wfee"></p>
+      <div class="fieldrow"><span class="muted"><span class="en">Chips are taken from ClubGG ID</span><span class="ru">Фишки спишутся с ID в ClubGG</span></span><span class="pill g" id="wd-id">—</span></div>
+      <div class="summary" id="wfee"></div>
       <p class="note" id="wmsg" hidden></p>
-      <button class="btn primary" type="submit" id="wsubmit"><span class="en">Request withdrawal</span><span class="ru">Запросить вывод</span></button>
+      <button class="btn primary" type="submit" id="wsubmit"><span class="en">Request cash out</span><span class="ru">Запросить вывод</span></button>
     </form>
 
     <ol class="steps">
-      <li><span class="en">Enter the amount and your wallet address, then send the request. You do not need to do anything in ClubGG.</span><span class="ru">Укажите сумму и адрес кошелька и отправьте запрос. В ClubGG ничего делать не нужно.</span></li>
-      <li><span class="en">A manager takes the chips from your ClubGG ID and sends you the USDT.</span><span class="ru">Менеджер снимет фишки с вашего ID в ClubGG и отправит вам USDT.</span></li>
-      <li class="only-trc"><span class="en">Cash outs on TRC20 have a fee of 3 USDT + 1%. On BEP20 there is no fee.</span><span class="ru">Вывод в сети TRC20 с комиссией 3 USDT + 1%. В сети BEP20 без комиссии.</span></li>
-      <li class="only-bep"><span class="en">No fee on BEP20: you get the full amount.</span><span class="ru">В сети BEP20 без комиссии: вы получите всю сумму.</span></li>
-      <li class="only-ton"><span class="en">The network fee is taken from the payout. On TON it is a fraction of a cent.</span><span class="ru">Комиссия сети удерживается из выплаты. В сети TON это доли цента.</span></li>
-      <li><span class="en">Minimum withdrawal: <b class="minwd">10</b> USDT.</span><span class="ru">Минимальный вывод: <b class="minwd">10</b> USDT.</span></li>
+      <li><span><span class="en">Enter the amount and your wallet address. Nothing to do in ClubGG.</span><span class="ru">Укажите сумму и адрес кошелька. В ClubGG ничего делать не нужно.</span></span></li>
+      <li><span><span class="en">A manager takes the chips from your ClubGG ID.</span><span class="ru">Менеджер снимет фишки с вашего ID в ClubGG.</span></span></li>
+      <li><span><span class="en">USDT is sent to your wallet automatically. Minimum <b class="minwd">10</b> USDT.</span><span class="ru">USDT автоматически придут на ваш кошелёк. Минимум <b class="minwd">10</b> USDT.</span></span></li>
     </ol>
+    <div class="hints">
+      <p class="hint only-trc"><span class="en">TRC20 cash outs: fee 3 USDT + 1%. BEP20 has no fee.</span><span class="ru">Вывод в TRC20: комиссия 3 USDT + 1%. В BEP20 без комиссии.</span></p>
+      <p class="hint only-bep"><span class="en">No fee on BEP20: you get the full amount.</span><span class="ru">В BEP20 без комиссии: вы получите всю сумму.</span></p>
+      <p class="hint only-ton"><span class="en">TON cash outs are paid by a manager.</span><span class="ru">Выводы в TON выплачивает менеджер.</span></p>
+    </div>
   </section>
 
   <!-- Manager panel (shown to staff only) -->
@@ -181,6 +201,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=15"></script>
+<script src="../assets/app.js?v=17"></script>
 </body>
 </html>

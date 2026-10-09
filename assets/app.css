@@ -330,3 +330,10 @@ body:not(.nobind) #bindcard, #tab-deposit:not(.st-form) #bindcard { display: non
 .no-t { color: var(--amber); font-weight: 500; }
 
 body[data-tab="settings"] #pinprompt, body[data-tab="settings"] #nocode, body[data-tab="settings"] #noid { display: none !important; }
+
+.secret { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-md); background: var(--card-2); border: 1px solid var(--line); cursor: pointer; overflow: hidden; }
+.secret .sk { flex: none; font-size: 18px; opacity: .8; }
+.secret .bigcode { flex: 1; padding: 0; border: 0; background: none; text-align: left; font-size: 22px; transition: filter .2s; }
+.secret:not(.open) .bigcode { filter: blur(7px); user-select: none; }
+.secret .sh { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: var(--fg); background: rgba(13,14,16,.25); pointer-events: none; transition: opacity .2s; }
+.secret.open .sh { opacity: 0; }

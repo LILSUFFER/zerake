@@ -358,11 +358,23 @@
     $('nocode').hidden = hasCode || !Object.keys(wallets).length;
   }
   function showCode(code) {
-    $('codetext').textContent = code; $('codeok').checked = false; $('codedone').disabled = true; $('codebox').hidden = false;
+    $('codetext').textContent = code; $('codewrap').classList.remove('open'); $('codeshow').innerHTML = bi('Show', 'Показать');
+    $('codeok').checked = false; $('codedone').disabled = true; $('codebox').hidden = false;
     try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {}
   }
+  function toggleCode() {
+    var open = $('codewrap').classList.toggle('open');
+    $('codeshow').innerHTML = open ? bi('Hide', 'Скрыть') : bi('Show', 'Показать');
+    try { tg.HapticFeedback.selectionChanged(); } catch (e) {}
+  }
+  $('codewrap').addEventListener('click', toggleCode);
+  $('codeshow').addEventListener('click', toggleCode);
+  $('codecopy').addEventListener('click', function () {
+    var c = $('codetext').textContent; if (!c || c === '—') return;
+    if (navigator.clipboard) navigator.clipboard.writeText(c).then(function () { haptic('success'); toast(t('Recovery code copied. Keep it somewhere safe.', 'Код восстановления скопирован. Сохраните его в надёжном месте.')); });
+  });
   $('codeok').addEventListener('change', function () { $('codedone').disabled = !$('codeok').checked; });
-  $('codedone').addEventListener('click', function () { $('codebox').hidden = true; $('codetext').textContent = '—'; });
+  $('codedone').addEventListener('click', function () { $('codebox').hidden = true; $('codetext').textContent = '—'; $('codewrap').classList.remove('open'); });
   $('pendcancel').addEventListener('click', function () {
     ask('Cancel the wallet change?', 'Отменить смену кошелька?', async function () {
       var r = await walletCall({ action: 'cancel' }); if (r.ok) { haptic('success'); takeState(r.data); }

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=30">
+<link rel="stylesheet" href="../assets/app.css?v=32">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -323,8 +323,12 @@
   <div class="card codecard">
     <div class="paidmark">🔑</div>
     <b class="paidtitle"><span class="en">Your recovery code</span><span class="ru">Ваш код восстановления</span></b>
-    <div class="bigcode" id="codetext">—</div>
-    <button class="chip" type="button" data-copy-from="codetext" style="justify-self:center"><span class="en">Copy</span><span class="ru">Копировать</span></button>
+    <div class="secret" id="codewrap" role="button" tabindex="0">
+      <span class="sk">🔑</span>
+      <span class="bigcode" id="codetext">—</span>
+      <span class="sh"><span class="en">Tap to show</span><span class="ru">Нажмите, чтобы показать</span></span>
+    </div>
+    <div class="tbtns two" style="width:100%"><button class="btn primary" type="button" id="codecopy"><span class="en">Copy</span><span class="ru">Копировать</span></button><button class="btn" type="button" id="codeshow"><span class="en">Show</span><span class="ru">Показать</span></button></div>
     <p class="payhint"><span class="en">Save it somewhere safe (write it down or keep a screenshot). We show it <b>only once</b>. With it you can change your wallet in an emergency. Without it, only through support in 7 days.</span><span class="ru">Сохраните его в надёжном месте (запишите или сделайте скриншот). Мы показываем его <b>только один раз</b>. С ним можно сменить кошелёк в экстренном случае. Без него — только через поддержку за 7 дней.</span></p>
     <label class="chk"><input type="checkbox" id="codeok"> <span><span class="en">I have saved the code</span><span class="ru">Я сохранил код</span></span></label>
     <button class="btn primary" type="button" id="codedone" disabled><span class="en">Done</span><span class="ru">Готово</span></button>
@@ -339,6 +343,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=31"></script>
+<script src="../assets/app.js?v=32"></script>
 </body>
 </html>

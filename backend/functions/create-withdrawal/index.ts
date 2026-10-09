@@ -33,7 +33,10 @@ function cors(o: string | null): Record<string, string> {
     "Content-Type": "application/json",
   };
 }
-const out = (b: unknown, s: number, h: Record<string, string>) => new Response(JSON.stringify(b), { status: s, headers: h });
+const out = (b: unknown, s: number, h: Record<string, string>) => {
+  if (s >= 400) console.warn("rejected:", s, JSON.stringify(b));
+  return new Response(JSON.stringify(b), { status: s, headers: h });
+};
 
 Deno.serve(async (req: Request) => {
   const h = cors(req.headers.get("origin"));

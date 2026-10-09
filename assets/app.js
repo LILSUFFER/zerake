@@ -176,8 +176,12 @@
       haptic('error');
       if (rd.error === 'below minimum') wmsg('Minimum withdrawal is ' + rd.min + ' USDT.', 'Минимальный вывод: ' + rd.min + ' USDT.', true);
       else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
+      else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
+      else if (rd.error === 'no clubgg id') wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true);
+      else if (rd.error === 'bad amount') wmsg('Enter the amount with at most 2 decimals, for example 50 or 50.25.', 'Введите сумму не более чем с 2 знаками после точки, например 50 или 50.25.', true);
+      else if (rd.error === 'above maximum') wmsg('Maximum withdrawal is ' + rd.max + ' USDT.', 'Максимальный вывод: ' + rd.max + ' USDT.', true);
       else if (rd.error === 'network disabled') wmsg('This network is not available yet.', 'Эта сеть пока недоступна.', true);
-      else wmsg('Could not send the request. Please try again.', 'Не удалось отправить запрос. Попробуйте ещё раз.', true);
+      else wmsg('Could not send the request (' + (rd.error || res.status) + '). Please try again.', 'Не удалось отправить запрос (' + (rd.error || res.status) + '). Попробуйте ещё раз.', true);
       return;
     }
     haptic('success');

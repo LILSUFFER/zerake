@@ -77,3 +77,6 @@ insert into public.scan_state (network) values ('TON') on conflict do nothing;
 alter table public.chain_config add column if not exists min_withdraw numeric(18,6) not null default 10;
 alter table public.chain_config add column if not exists max_withdraw numeric(18,2) not null default 50000;
 drop policy if exists "withdrawals_request_own" on public.withdrawals;
+
+-- 6) the first table version had a TRC20-only address check; the format check above replaces it
+alter table public.withdrawals drop constraint if exists withdrawals_address_check;

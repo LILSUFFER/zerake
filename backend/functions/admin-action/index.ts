@@ -45,7 +45,15 @@ async function callPayout(payload: Record<string, unknown>): Promise<Record<stri
     return await r.json();
   } catch (e) { return { ok: false, reason: "payout service unavailable: " + String(e) }; }
 }
-const autoPay = (id: number) => callPayout({ id });
+// Pay automatically; if it does not go through, keep the reason on the request so managers see it.
+async function autoPay(id: number): Promise<Record<string, unknown>> {
+  const r = await callPayout({ id });
+  if (!r.ok && !r.pending && r.reason) {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    await admin.from("withdrawals").update({ note: String(r.reason).slice(0, 300) }).eq("id", id).eq("status", "approved");
+  }
+  return r;
+}
 
 Deno.serve(async (req: Request) => {
   const h = cors(req.headers.get("origin"));

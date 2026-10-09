@@ -498,7 +498,7 @@
         b.appendChild(btn('primary', bi('Check status', 'Проверить статус'), function () { wact('wretry', w.id); }));
         if (staffRole === 'owner') { b.className = 'tbtns two'; b.appendChild(btn('', bi('Checked: it was paid', 'Проверил: выплачено'), function () { payForm(card, w); })); }
       } else if (w.status === 'approved') {
-        var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note || t('not started yet', 'ещё не запускалась'));
+        var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note ? (document.body.dataset.lang === 'ru' && NOTE_RU[w.note] || w.note) : t('not started yet', 'ещё не запускалась'));
         card.appendChild(why);
         b.className = 'tbtns two';
         b.appendChild(btn('primary', bi('Send USDT', 'Отправить USDT'), function () { wact('wretry', w.id); }));
@@ -533,7 +533,7 @@
         if (r.ok) {
           var p = r.data.payout || {};
           haptic(p.ok ? 'success' : 'warning');
-          try { tg.showAlert(p.ok ? t('Done. USDT sent automatically.', 'Готово. USDT отправлены автоматически.') : t('Chips confirmed, but the auto payout did not go through: ', 'Фишки подтверждены, но автовыплата не прошла: ') + (p.reason || '')); } catch (e) {}
+          try { tg.showAlert(p.ok ? t('Done. USDT sent automatically.', 'Готово. USDT отправлены автоматически.') : t('Chips confirmed, but the auto payout did not go through: ', 'Фишки подтверждены, но автовыплата не прошла: ') + ((document.body.dataset.lang === 'ru' && NOTE_RU[p.reason]) || p.reason || '')); } catch (e) {}
           loadAdmin(false); return;
         }
         haptic('error'); b.disabled = false;
@@ -555,7 +555,7 @@
     editing = 0;
     var r = await adminCall(Object.assign({ action: action, id: id }, extra || {}));
     if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Это уже взял или закрыл кто-то другой.')); } catch (e) {} }
-    else if (r.ok && r.data.payout && !r.data.payout.ok) { haptic('error'); try { tg.showAlert(t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (r.data.payout.reason || '')); } catch (e) {} }
+    else if (r.ok && r.data.payout && !r.data.payout.ok) { haptic('error'); try { tg.showAlert(t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + ((document.body.dataset.lang === 'ru' && NOTE_RU[r.data.payout.reason]) || r.data.payout.reason || '')); } catch (e) {} }
     else if (!r.ok) { haptic('error'); try { tg.showAlert(t('Could not save. Check the transfer hash and try again.', 'Не удалось сохранить. Проверьте хеш перевода и повторите.')); } catch (e) {} }
     else haptic('success');
     loadAdmin(false);
@@ -564,6 +564,7 @@
     var box = $(boxId); box.innerHTML = ''; $(cardId).hidden = !rows.length;
     rows.forEach(function (r) { box.appendChild(r); });
   }
+  var NOTE_RU = {"not enough USDT on the deposit addresses": "на адресах клуба не хватает USDT — пополните пул или выплатите вручную", "not enough USDT on the deposit addresses (after the GasFree fee)": "на адресах клуба не хватает USDT (с учётом комиссии GasFree)", "auto payout is off (no wallet key)": "автовыплаты выключены: на сервере не задан ключ кошелька"};
   var editing = 0;   // a manager is typing in a card: do not redraw the queue under their fingers
   async function loadAdmin(full) {
     if (!staffRole) return;

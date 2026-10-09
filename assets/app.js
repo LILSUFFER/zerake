@@ -21,6 +21,20 @@
   var $ = function (id) { return document.getElementById(id); };
   var sb = null, me = null, ggId = '';
 
+  /* in-app notifications instead of Telegram pop-ups */
+  function toast(text, kind) {
+    var box = document.getElementById('toasts'); if (!box) return;
+    var el = document.createElement('div');
+    var bad = kind === 'bad' || /not|could|wrong|failed|не удалось|неверн|не прошла|не совпадает|уже взял|ошибк/i.test(text);
+    el.className = 'toast' + (bad ? ' bad' : '');
+    el.innerHTML = '<span class="ti">' + (bad ? '!' : '✓') + '</span><span class="tt"></span>';
+    el.lastChild.textContent = text;
+    box.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('in'); });
+    var hide = function () { el.classList.remove('in'); setTimeout(function () { el.remove(); }, 250); };
+    el.addEventListener('click', hide);
+    setTimeout(hide, bad ? 6000 : 3500);
+  }
   function bi(en, ru) { return '<span class="en">' + en + '</span><span class="ru">' + ru + '</span>'; }
   function fid(v) { var d = String(v == null ? '' : v).replace(/\D/g, ''); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, '$1-') : String(v || ''); }
   function t(en, ru) { return document.body.dataset.lang === 'ru' ? ru : en; }
@@ -224,11 +238,11 @@
     }
   }
   function offerBio(pin) {
-    if (!bioCan()) { try { tg.showAlert(t('PIN is set. It will be asked when the app opens and for cash outs.', 'PIN-код установлен. Его спросят при входе и при выводе.')); } catch (e) {} return; }
+    if (!bioCan()) { try { toast(t('PIN is set. It will be asked when the app opens and for cash outs.', 'PIN-код установлен. Его спросят при входе и при выводе.')); } catch (e) {} return; }
     ask('Also unlock with ' + bioName() + '?', 'Входить также по ' + bioName() + '?', function () {
       bm.requestAccess({ reason: t('Unlock Zerake', 'Вход в Zerake') }, function (granted) {
         if (!granted) return;
-        bm.updateBiometricToken(pin, function (ok) { if (ok) { haptic('success'); try { tg.showAlert(bioName() + t(' is on.', ' включён.')); } catch (e) {} } });
+        bm.updateBiometricToken(pin, function (ok) { if (ok) { haptic('success'); try { toast(bioName() + t(' is on.', ' включён.')); } catch (e) {} } });
       });
     });
   }
@@ -624,14 +638,19 @@
     return b;
   }
   function ask(en, ru, yes) {
-    var msg = t(en, ru);
     var no = function () { if (staffRole) loadAdmin(false); };
-    if (tg && tg.showConfirm) tg.showConfirm(msg, function (ok) { if (ok) yes(); else no(); });
-    else if (window.confirm(msg)) yes(); else no();
+    var box = $('confirm');
+    $('confirmtext').textContent = t(en, ru);
+    box.hidden = false;
+    var done = function (ok) { box.hidden = true; $('confirmyes').onclick = $('confirmno').onclick = box.onclick = null; if (ok) yes(); else no(); };
+    $('confirmyes').onclick = function (e) { e.stopPropagation(); done(true); };
+    $('confirmno').onclick = function (e) { e.stopPropagation(); done(false); };
+    box.onclick = function (e) { if (e.target === box) done(false); };
+    try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {}
   }
   async function act(action, id) {
     var r = await adminCall({ action: action, id: id });
-    if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Эту заявку уже взял или закрыл кто-то другой.')); } catch (e) {} }
+    if (!r.ok && r.status === 409) { haptic('error'); try { toast(t('Someone else already took or finished this one.', 'Эту заявку уже взял или закрыл кто-то другой.')); } catch (e) {} }
     else if (r.ok) haptic('success');
     loadAdmin(false);
   }
@@ -747,11 +766,11 @@
         if (r.ok) {
           var p = r.data.payout || {};
           haptic(p.ok ? 'success' : 'warning');
-          try { tg.showAlert(p.ok ? t('Done. USDT sent automatically.', 'Готово. USDT отправлены автоматически.') : t('Chips confirmed, but the auto payout did not go through: ', 'Фишки подтверждены, но автовыплата не прошла: ') + ((document.body.dataset.lang === 'ru' && NOTE_RU[p.reason]) || p.reason || '')); } catch (e) {}
+          try { toast(p.ok ? t('Done. USDT sent automatically.', 'Готово. USDT отправлены автоматически.') : t('Chips confirmed, but the auto payout did not go through: ', 'Фишки подтверждены, но автовыплата не прошла: ') + ((document.body.dataset.lang === 'ru' && NOTE_RU[p.reason]) || p.reason || '')); } catch (e) {}
           loadAdmin(false); return;
         }
         haptic('error'); b.disabled = false;
-        try { tg.showAlert(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.chips) + ').', 'Сумма не совпадает с заявкой (' + Number(w.chips) + ').') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
+        try { toast(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.chips) + ').', 'Сумма не совпадает с заявкой (' + Number(w.chips) + ').') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
       });
     }));
     card.appendChild(f); setTimeout(function () { inp.focus(); }, 50);
@@ -768,9 +787,9 @@
   async function wact(action, id, extra) {
     editing = 0;
     var r = await adminCall(Object.assign({ action: action, id: id }, extra || {}));
-    if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Это уже взял или закрыл кто-то другой.')); } catch (e) {} }
-    else if (r.ok && r.data.payout && !r.data.payout.ok) { haptic('error'); try { tg.showAlert(t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + ((document.body.dataset.lang === 'ru' && NOTE_RU[r.data.payout.reason]) || r.data.payout.reason || '')); } catch (e) {} }
-    else if (!r.ok) { haptic('error'); try { tg.showAlert(t('Could not save. Check the transfer hash and try again.', 'Не удалось сохранить. Проверьте хеш перевода и повторите.')); } catch (e) {} }
+    if (!r.ok && r.status === 409) { haptic('error'); try { toast(t('Someone else already took or finished this one.', 'Это уже взял или закрыл кто-то другой.')); } catch (e) {} }
+    else if (r.ok && r.data.payout && !r.data.payout.ok) { haptic('error'); try { toast(t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + ((document.body.dataset.lang === 'ru' && NOTE_RU[r.data.payout.reason]) || r.data.payout.reason || '')); } catch (e) {} }
+    else if (!r.ok) { haptic('error'); try { toast(t('Could not save. Check the transfer hash and try again.', 'Не удалось сохранить. Проверьте хеш перевода и повторите.')); } catch (e) {} }
     else haptic('success');
     loadAdmin(false);
   }

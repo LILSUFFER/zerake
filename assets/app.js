@@ -520,12 +520,16 @@
     return { nNew: nNew, nMine: nMine, free: items.filter(function (w) { return !w.claimed_name; }).map(function (w) { return 'w' + w.id; }) };
   }
   function takenForm(card, w) {
+    editing = Date.now();
+    if (card.querySelector('.txin')) { card.querySelector('.txin').focus(); return; }
     var f = el('div', 'stack');
     f.appendChild(el('div', 'note', bi('Type how many chips you took from the player. It must match the request exactly.', 'Введите, сколько фишек вы сняли с игрока. Должно точно совпасть с заявкой.')));
     var inp = el('input', 'txin'); inp.inputMode = 'decimal'; inp.placeholder = t('Amount taken, USDT', 'Снятая сумма, USDT');
     f.appendChild(inp);
     f.appendChild(btn('primary', bi('Confirm', 'Подтвердить'), function (b) {
+      b.innerHTML = bi('Confirming and sending USDT…', 'Подтверждаю и отправляю USDT…');
       adminCall({ action: 'wtaken', id: w.id, amount: inp.value }).then(function (r) {
+        editing = 0;
         if (r.ok) {
           var p = r.data.payout || {};
           haptic(p.ok ? 'success' : 'warning');
@@ -536,9 +540,11 @@
         try { tg.showAlert(r.data && r.data.error === 'amount mismatch' ? t('The amount does not match the request (' + Number(w.chips) + ').', 'Сумма не совпадает с заявкой (' + Number(w.chips) + ').') : t('Could not save. Try again.', 'Не удалось сохранить. Повторите.')); } catch (e) {}
       });
     }));
-    card.appendChild(f);
+    card.appendChild(f); setTimeout(function () { inp.focus(); }, 50);
   }
   function payForm(card, w) {
+    editing = Date.now();
+    if (card.querySelector('.txin')) { card.querySelector('.txin').focus(); return; }
     var f = el('div', 'stack');
     var inp = el('input', 'txin'); inp.placeholder = t('Transfer hash (optional)', 'Хеш перевода (необязательно)'); inp.spellcheck = false; inp.autocapitalize = 'off';
     f.appendChild(inp);
@@ -546,6 +552,7 @@
     card.appendChild(f);
   }
   async function wact(action, id, extra) {
+    editing = 0;
     var r = await adminCall(Object.assign({ action: action, id: id }, extra || {}));
     if (!r.ok && r.status === 409) { haptic('error'); try { tg.showAlert(t('Someone else already took or finished this one.', 'Это уже взял или закрыл кто-то другой.')); } catch (e) {} }
     else if (r.ok && r.data.payout && !r.data.payout.ok) { haptic('error'); try { tg.showAlert(t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (r.data.payout.reason || '')); } catch (e) {} }
@@ -557,8 +564,11 @@
     var box = $(boxId); box.innerHTML = ''; $(cardId).hidden = !rows.length;
     rows.forEach(function (r) { box.appendChild(r); });
   }
+  var editing = 0;   // a manager is typing in a card: do not redraw the queue under their fingers
   async function loadAdmin(full) {
     if (!staffRole) return;
+    if (editing && Date.now() - editing < 120000 && !full) return;
+    editing = 0;
     var q = await adminCall({ action: 'queue' });
     var wq = await adminCall({ action: 'wqueue' });
     var wres = wq.ok ? renderWQueue(wq.data.items || []) : { nNew: 0, nMine: 0, free: [] };

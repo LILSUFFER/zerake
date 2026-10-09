@@ -13,6 +13,9 @@
   };
   var WD_FEE = { TRC20: [3, 1], BEP20: [0, 0], TON: [0, 0], GRAM: [0, 0] };   // fixed USDT, percent (the server decides; this is a preview)
   function wdFee(n, chips) { var f = WD_FEE[n] || [0, 0]; return Math.ceil(Math.round((f[0] + chips * f[1] / 100) * 1e6) / 1e4) / 100; }
+  var CHAIN_OF = { TRC20: 'TRON', BEP20: 'BSC', TON: 'TON', GRAM: 'TON' };
+  var CHAIN_NAME = { TRON: 'Tron (TRC20)', BSC: 'BNB Chain (BEP20)', TON: 'TON' };
+  var wallets = {}, walletsLoaded = false;
   var net = 'TRC20';
   var tg = window.Telegram && window.Telegram.WebApp;
   var $ = function (id) { return document.getElementById(id); };
@@ -114,7 +117,7 @@
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = chain; });
     document.querySelectorAll('.coinname').forEach(function (e) { e.textContent = coin; });
     $('req-net').textContent = coin + ' · ' + chain;
-    loadWdAddrs();
+    applyWallet();
     $('wmsg').hidden = true;
     feePreview();
   }
@@ -164,6 +167,69 @@
 
   function wmsg(en, ru, bad) {
     var m = $('wmsg'); m.innerHTML = bi(en, ru); m.className = 'note' + (bad ? ' bad' : ''); m.hidden = false;
+  }
+  function shortAddr(a) { return a && a.length > 24 ? a.slice(0, 10) + '…' + a.slice(-8) : (a || '—'); }
+  /* TON friendly address (EQ/UQ/raw) -> one form (UQ…) so the same wallet is stored once */
+  function tonNormalize(a) {
+    a = String(a).trim();
+    if (/^-?\d+:[0-9a-fA-F]{64}$/.test(a)) return tonFriendly(a);
+    try {
+      var bin = atob(a.replace(/-/g, '+').replace(/_/g, '/')); if (bin.length !== 36) return a;
+      var hex = ''; for (var i = 2; i < 34; i++) hex += ('0' + bin.charCodeAt(i).toString(16)).slice(-2);
+      var wc = bin.charCodeAt(1); return tonFriendly((wc > 127 ? wc - 256 : wc) + ':' + hex);
+    } catch (e) { return a; }
+  }
+  async function loadWallets() {
+    if (!me) return;
+    var r = await sb.from('player_wallets').select('chain,address').eq('user_id', me.id);
+    wallets = {}; (r.data || []).forEach(function (w) { wallets[w.chain] = w.address; });
+    walletsLoaded = true; applyWallet();
+  }
+  function applyWallet() {
+    var ch = CHAIN_OF[net], w = wallets[ch];
+    document.body.classList.toggle('nobind', walletsLoaded && !w);
+    document.querySelectorAll('.chainname').forEach(function (e) { e.textContent = CHAIN_NAME[ch]; });
+    $('bindaddr').placeholder = PLACEHOLDER[net];
+    $('dep-wallet').textContent = shortAddr(w); $('dep-wallet').title = w || '';
+    $('wd-wallet').textContent = w || '—'; $('waddr').value = w || '';
+    $('wnoaddr').hidden = !walletsLoaded || !!w;
+    $('wsubmit').disabled = !w || !ggId;
+    loadCap();
+  }
+  $('bindbtn').addEventListener('click', function () {
+    var m = $('bindmsg'); m.hidden = true;
+    var a = $('bindaddr').value.trim();
+    if (net === 'TON' || net === 'GRAM') a = tonNormalize(a);
+    if (!ADDR_RE[net].test(a)) { m.className = 'note bad'; m.innerHTML = bi(ADDR_HINT[net][0], ADDR_HINT[net][1]); m.hidden = false; return; }
+    if (!$('bindok').checked) { m.className = 'note bad'; m.innerHTML = bi('Please confirm it is your personal wallet.', 'Подтвердите, что это ваш личный кошелёк.'); m.hidden = false; return; }
+    ask('Bind ' + a + ' for good? It cannot be changed later.', 'Привязать ' + a + ' навсегда? Сменить его потом будет нельзя.', async function () {
+      $('bindbtn').disabled = true;
+      var r = await sb.from('player_wallets').insert({ user_id: me.id, chain: CHAIN_OF[net], address: a });
+      $('bindbtn').disabled = false;
+      if (r.error) {
+        haptic('error'); m.className = 'note bad'; m.hidden = false;
+        m.innerHTML = /duplicate|unique/i.test(r.error.message) ? bi('This wallet is already bound (to you or to another player).', 'Этот кошелёк уже привязан (к вам или к другому игроку).') : bi('Could not bind. Check the address and try again.', 'Не удалось привязать. Проверьте адрес и попробуйте ещё раз.');
+        return;
+      }
+      haptic('success'); $('bindaddr').value = ''; $('bindok').checked = false; await loadWallets();
+    });
+  });
+  /* how much can go back to this network now ("back the same way") */
+  async function loadCap() {
+    var box = $('wcap'); if (!box || !me) return;
+    var n = net, ch = CHAIN_OF[n];
+    var d = await sb.from('deposits').select('network,amount,status').eq('user_id', me.id);
+    var w = await sb.from('withdrawals').select('network,chips,amount,status').eq('user_id', me.id);
+    if (n !== net) return;
+    var left = {};
+    (d.data || []).forEach(function (x) { if (x.status === 'received' || x.status === 'chips_sent') left[CHAIN_OF[x.network]] = (left[CHAIN_OF[x.network]] || 0) + Number(x.amount); });
+    (w.data || []).forEach(function (x) { if (x.status !== 'rejected') left[CHAIN_OF[x.network]] = (left[CHAIN_OF[x.network]] || 0) - Number(x.chips != null ? x.chips : x.amount); });
+    var others = 0; Object.keys(left).forEach(function (k) { if (k !== ch) others += Math.max(0, left[k]); });
+    if (others > 0.009) {
+      var cap = Math.floor(Math.max(0, left[ch] || 0) * 100) / 100;
+      box.innerHTML = bi('To this network you can cash out up to <b>$' + cap + '</b> now: deposits from other networks are paid back to them first.', 'В эту сеть сейчас можно вывести до <b>$' + cap + '</b>: депозиты из других сетей сначала возвращаются туда, откуда пришли.');
+      box.hidden = false;
+    } else box.hidden = true;
   }
   /* TON raw address (0:HEX) -> friendly non-bounceable UQ… form */
   function tonFriendly(raw) {
@@ -228,7 +294,11 @@
       else if (rd.error === 'too many pending') wmsg('You already have 3 requests waiting. Please wait for them to be paid.', 'У вас уже 3 запроса в ожидании. Дождитесь их выплаты.', true);
       else if (rd.error === 'below fee') wmsg('The amount is too small to cover the fee (' + rd.fee + ' USDT).', 'Сумма слишком мала, чтобы покрыть комиссию (' + rd.fee + ' USDT).', true);
       else if (rd.error === 'bad address') wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true);
-      else if (rd.error === 'address not allowed') wmsg('Cash outs go only to a wallet you deposited from.', 'Вывод возможен только на кошелёк, с которого вы пополняли.', true);
+      else if (rd.error === 'address not allowed' || rd.error === 'no bound wallet') wmsg('Cash outs go only to your bound wallet on this network.', 'Вывод возможен только на ваш привязанный кошелёк в этой сети.', true);
+      else if (rd.error === 'same way') {
+        var wh = (rd.where || []).map(function (x) { return CHAIN_NAME[x.chain] + ' — $' + x.amount; }).join(', ');
+        wmsg('To this network you can cash out up to $' + rd.cap + '. First withdraw to: ' + wh + '.', 'В эту сеть можно вывести до $' + rd.cap + '. Сначала выведите в: ' + wh + '.', true);
+      }
       else if (rd.error === 'no clubgg id') wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true);
       else if (rd.error === 'bad amount') wmsg('Enter the amount with at most 2 decimals, for example 50 or 50.25.', 'Введите сумму не более чем с 2 знаками после точки, например 50 или 50.25.', true);
       else if (rd.error === 'above maximum') wmsg('Maximum withdrawal is ' + rd.max + ' USDT.', 'Максимальный вывод: ' + rd.max + ' USDT.', true);
@@ -237,7 +307,7 @@
       else wmsg('Could not send the request (' + (rd.error || res.status) + '). Please try again.', 'Не удалось отправить запрос (' + (rd.error || res.status) + '). Попробуйте ещё раз.', true);
       return;
     }
-    haptic('success');
+    haptic('success'); loadCap();
     var got = rd.coin_amount ? Number(rd.coin_amount) + ' GRAM' : rd.payout + ' USDT';
     wmsg('Request ' + (rd.op_id || '') + ' sent. A manager will take the chips from your ClubGG ID and you will get ' + got + '.', 'Заявка ' + (rd.op_id || '') + ' отправлена. Менеджер снимет фишки с вашего ID, вы получите ' + got + '.', false);
     $('wamt').value = '';
@@ -355,6 +425,7 @@
     var r = await callReq({ amount: $('reqamt').value, fresh: true });
     $('reqbtn').disabled = false;
     if (r.ok && r.data.request) { reqCache[net] = r.data.request; showRequest(r.data.request); return; }
+    if (r.data && r.data.error === 'bind wallet') { loadWallets(); return; }
     var er = r.data && r.data.error;
     if (er === 'network disabled') reqErr('This network is not available yet.', 'Эта сеть пока недоступна.');
     else if (er === 'below minimum') reqErr('Minimum deposit is ' + r.data.min + ' USDT.', 'Минимальный депозит: ' + r.data.min + ' USDT.');
@@ -684,7 +755,7 @@
     var u = tg.initDataUnsafe && tg.initDataUnsafe.user;
     var nm = u ? (u.username ? '@' + u.username : (u.first_name || '')) : '';
     if (nm) { var w = $('who'); w.innerHTML = '<span class="ava"></span><span class="nm"></span>'; w.firstChild.textContent = (u.first_name || u.username || '?').charAt(0).toUpperCase(); w.lastChild.textContent = nm; }
-    return Promise.all([loadProfile(), loadAddress()]).then(loadWdAddrs);
+    return Promise.all([loadProfile(), loadAddress()]).then(loadWallets);
   }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;
     var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];

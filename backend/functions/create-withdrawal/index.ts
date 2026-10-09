@@ -42,6 +42,7 @@ function normAddr(network: string, a: string): string {
   if (network === "TON" || network === "GRAM") { try { return tonToRaw(a); } catch { return a.trim(); } }
   return a.trim();
 }
+const CHAIN_OF: Record<string, string> = { TRC20: "TRON", BEP20: "BSC", TON: "TON", GRAM: "TON" };
 function checkAddress(network: string, address: string): boolean {
   return !!ADDRESS[network] && ADDRESS[network].test(address);
 }
@@ -111,11 +112,27 @@ Deno.serve(async (req: Request) => {
   const profile = (await admin.from("profiles").select("gg_id").eq("user_id", u.user.id).maybeSingle()).data;
   if (!profile?.gg_id) return out({ error: "no clubgg id" }, 400, h);
 
-  // Cash outs go only back to a wallet the player has deposited from, on the same chain (TON and GRAM share wallets).
-  const chains = network === "TON" || network === "GRAM" ? ["TON", "GRAM"] : [network];
-  const from = (await admin.from("deposits").select("from_address").eq("user_id", u.user.id).in("network", chains)).data ?? [];
-  const allowed = new Set(from.map((d) => normAddr(network, String(d.from_address ?? ""))).filter(Boolean));
-  if (!allowed.has(normAddr(network, address))) return out({ error: "address not allowed" }, 400, h);
+  // 1) Only to the wallet the player bound for this chain (players cannot add or change wallets).
+  const chain = CHAIN_OF[network];
+  const bound = (await admin.from("player_wallets").select("address").eq("user_id", u.user.id).eq("chain", chain).maybeSingle()).data;
+  if (!bound) return out({ error: "no bound wallet" }, 400, h);
+  if (normAddr(network, bound.address) !== normAddr(network, address)) return out({ error: "address not allowed" }, 400, h);
+
+  // 2) Back the same way: while deposits made on other chains are not paid back yet, a chain can take
+  //    at most what was deposited on it. Winnings above all deposits may go to any bound wallet.
+  const deps = (await admin.from("deposits").select("network,amount").eq("user_id", u.user.id).in("status", ["received", "chips_sent"])).data ?? [];
+  const wds = (await admin.from("withdrawals").select("network,chips,amount").eq("user_id", u.user.id).neq("status", "rejected")).data ?? [];
+  const left: Record<string, number> = {};
+  for (const d of deps) left[CHAIN_OF[d.network]] = (left[CHAIN_OF[d.network]] ?? 0) + Number(d.amount);
+  for (const w of wds) left[CHAIN_OF[w.network]] = (left[CHAIN_OF[w.network]] ?? 0) - Number(w.chips ?? w.amount);
+  const othersLeft = Object.entries(left).filter(([c]) => c !== chain).reduce((s, [, v]) => s + Math.max(0, v), 0);
+  if (othersLeft > 0.009) {
+    const cap = Math.floor(Math.max(0, left[chain] ?? 0) * 100) / 100;
+    if (Number(amount) > cap + 0.001) {
+      const where = Object.entries(left).filter(([c, v]) => c !== chain && v > 0.009).map(([c, v]) => ({ chain: c, amount: Math.floor(v * 100) / 100 }));
+      return out({ error: "same way", cap, where }, 400, h);
+    }
+  }
 
   // A player cannot pile up requests: at most 3 waiting at once.
   const pending = await admin.from("withdrawals").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).eq("status", "pending");

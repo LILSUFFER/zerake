@@ -48,6 +48,7 @@ function b64ToHex(b64: string): string {
   return hexOf(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 /** One comparable form per network (case rules differ). */
+const CHAIN_OF: Record<string, string> = { TRC20: "TRON", BEP20: "BSC", TON: "TON", GRAM: "TON" };
 function normAddr(network: string, a: string): string {
   if (network === "BEP20") return a.toLowerCase();
   if (network === "TON" || network === "GRAM") { try { return tonToRaw(a); } catch { return a; } }
@@ -210,7 +211,10 @@ Deno.serve(async () => {
           usd = (paid >= want * 0.995 ? base : Math.floor(paid / want * base * 100) / 100).toFixed(6);
           coin = f.amount;
         }
+        const bw = (await admin.from("player_wallets").select("address").eq("user_id", req.user_id).eq("chain", CHAIN_OF[c.network]).maybeSingle()).data;
+        const fromBound = !!bw && normAddr(c.network, bw.address) === normAddr(c.network, f.from);
         rows.push({
+          from_bound: fromBound,
           user_id: req.user_id, network: c.network, tx_hash: f.tx_hash, from_address: f.from, to_address: f.to, request_id: req.id,
           amount: usd, coin_amount: coin, status: Number(usd) >= Number(c.min_deposit) ? "received" : "below_min",
         });
@@ -218,9 +222,9 @@ Deno.serve(async () => {
         orphans.push({ network: c.network, tx_hash: f.tx_hash, address: f.to, from_address: f.from, amount: f.amount });
       }
     }
-    let created: Array<{ op_id: string; tx_hash: string; user_id: string; amount: string; coin_amount: string | null; status: string; to_address: string; request_id: number }> = [];
+    let created: Array<{ from_bound: boolean | null; from_address: string; op_id: string; tx_hash: string; user_id: string; amount: string; coin_amount: string | null; status: string; to_address: string; request_id: number }> = [];
     if (rows.length) {
-      const ins = await admin.from("deposits").upsert(rows, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,coin_amount,status,to_address,request_id");
+      const ins = await admin.from("deposits").upsert(rows, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,coin_amount,status,to_address,request_id,from_bound,from_address");
       if (ins.error) throw new Error("save: " + ins.error.message);
       created = ins.data ?? [];
     }
@@ -233,7 +237,7 @@ Deno.serve(async () => {
       const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
       await notifyUser(d.user_id, msgDepositReceived(d, c.network, p.data?.gg_id));
 
-      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"} (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
+      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"} (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.${d.from_bound === false ? `\n⚠️ NOT from the player's bound wallet (from ${d.from_address}). Check before sending chips.` : ""}\n${c.explorer_tx}${d.tx_hash}`, true);
     }
     let orphanNew = 0;
     if (orphans.length) {

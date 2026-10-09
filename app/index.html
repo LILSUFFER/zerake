@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=22">
+<link rel="stylesheet" href="../assets/app.css?v=25">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -46,6 +46,18 @@
 
   <!-- Deposit -->
   <section id="tab-deposit" class="pane st-form">
+    <div class="card" id="bindcard">
+      <div class="row">
+        <h2 class="ctitle"><span class="en">Bind your <span class="chainname">Tron</span> wallet</span><span class="ru">Привяжите кошелёк <span class="chainname">Tron</span></span></h2>
+        <span class="pill">🔒</span>
+      </div>
+      <p class="payhint"><span class="en">Before the first deposit, tell us the wallet you will pay from. Cash outs on this network go <b>only</b> to it. It cannot be changed later, so this protects your money even if someone gets into your account.</span><span class="ru">Перед первым депозитом укажите кошелёк, с которого будете пополнять. Выводы в этой сети уходят <b>только</b> на него. Сменить его потом нельзя: это защищает ваши деньги, даже если кто-то получит доступ к аккаунту.</span></p>
+      <input id="bindaddr" spellcheck="false" autocapitalize="off" placeholder="T..." style="font-family:ui-monospace,Consolas,monospace;font-size:15px">
+      <label class="chk"><input type="checkbox" id="bindok"> <span><span class="en">This is my personal wallet (not an exchange address) and I have checked it.</span><span class="ru">Это мой личный кошелёк (не адрес биржи), я его проверил.</span></span></label>
+      <p class="note" id="bindmsg" hidden></p>
+      <button class="btn primary" type="button" id="bindbtn"><span class="en">Bind for good</span><span class="ru">Привязать навсегда</span></button>
+    </div>
+
     <div id="trc-flow" class="stack">
       <form class="card" id="reqform" autocomplete="off">
         <div class="row">
@@ -58,6 +70,7 @@
           <button type="button" data-quick="25">25</button><button type="button" data-quick="50">50</button><button type="button" data-quick="100">100</button><button type="button" data-quick="250">250</button><button type="button" data-quick="500">500</button>
         </div>
         <div class="fieldrow"><span class="muted"><span class="en">Chips go to ClubGG ID</span><span class="ru">Фишки придут на ID в ClubGG</span></span><span class="pill g" id="dep-id2">—</span></div>
+        <div class="fieldrow"><span class="muted"><span class="en">Pay only from</span><span class="ru">Платите только с</span></span><span class="pill mono" id="dep-wallet">—</span></div>
         <p class="note" id="reqmsg" hidden></p>
         <button class="btn primary" type="submit" id="reqbtn"><span class="en">Create deposit request</span><span class="ru">Создать заявку</span></button>
       </form>
@@ -132,9 +145,11 @@
       <label for="wamt"><span class="en">Chips to cash out</span><span class="ru">Сколько фишек вывести</span></label>
       <div class="money"><input id="wamt" inputmode="decimal" placeholder="50"><span class="cur">$</span></div>
 
-      <label for="waddr"><span class="en">Wallet you deposited from</span><span class="ru">Кошелёк, с которого вы пополняли</span></label>
-      <select id="waddr" class="addrsel"></select>
-      <p class="note bad" id="wnoaddr" hidden><span class="en">Cash outs go only to the wallet you deposited from. You have no deposits on <b class="netname">TRC20</b> yet: make a deposit from your wallet first.</span><span class="ru">Вывод возможен только на кошелёк, с которого вы пополняли. В сети <b class="netname">TRC20</b> у вас ещё нет депозитов: сначала пополните со своего кошелька.</span></p>
+      <label><span class="en">Your bound wallet</span><span class="ru">Ваш привязанный кошелёк</span></label>
+      <div class="fieldrow"><span class="addr" id="wd-wallet" style="background:none;border:0;padding:0">—</span><span class="pill">🔒</span></div>
+      <input type="hidden" id="waddr">
+      <p class="hint" id="wcap" hidden></p>
+      <p class="note bad" id="wnoaddr" hidden><span class="en">You have not bound a wallet on this network yet. It is bound with your first deposit on the Buy tab.</span><span class="ru">В этой сети у вас ещё нет привязанного кошелька. Он привязывается перед первым депозитом на вкладке «Купить».</span></p>
 
       <div class="fieldrow"><span class="muted"><span class="en">Chips are taken from ClubGG ID</span><span class="ru">Фишки спишутся с ID в ClubGG</span></span><span class="pill g" id="wd-id">—</span></div>
       <div class="summary" id="wfee"></div>
@@ -143,7 +158,7 @@
     </form>
 
     <ol class="steps">
-      <li><span><span class="en">Enter the amount and choose the wallet you deposited from. For your safety we pay only to it.</span><span class="ru">Укажите сумму и выберите кошелёк, с которого пополняли. Ради безопасности платим только на него.</span></span></li>
+      <li><span><span class="en">Enter the amount. We pay only to your bound wallet; while deposits from other networks are not paid back, each network gets back what was deposited on it.</span><span class="ru">Укажите сумму. Платим только на привязанный кошелёк. Пока не возвращены депозиты из других сетей, в каждую сеть выводится не больше, чем в неё внесено.</span></span></li>
       <li><span><span class="en">A manager takes the chips from your ClubGG ID.</span><span class="ru">Менеджер снимет фишки с вашего ID в ClubGG.</span></span></li>
       <li><span><span class="en">USDT is sent to your wallet automatically. Minimum <b class="minwd">10</b> USDT.</span><span class="ru">USDT автоматически придут на ваш кошелёк. Минимум <b class="minwd">10</b> USDT.</span></span></li>
     </ol>
@@ -216,6 +231,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=24"></script>
+<script src="../assets/app.js?v=25"></script>
 </body>
 </html>

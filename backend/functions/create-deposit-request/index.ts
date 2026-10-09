@@ -10,6 +10,8 @@ import { HDNodeWallet } from "https://esm.sh/ethers@6.13.4";
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
 const NETWORKS = ["TRC20", "BEP20", "TON", "GRAM"];
+const CHAIN_OF: Record<string, string> = { TRC20: "TRON", BEP20: "BSC", TON: "TON", GRAM: "TON" };
+
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 // ---- helpers (pure functions, unit-tested) ----
@@ -150,6 +152,9 @@ Deno.serve(async (req: Request) => {
     return out({ ok: true }, 200, h);
   }
   if (!cfg.enabled) return out({ error: "network disabled" }, 503, h);
+  // The player must bind their own wallet for this chain before the first deposit (cash outs go only there).
+  const bound = (await admin.from("player_wallets").select("address").eq("user_id", u.user.id).eq("chain", CHAIN_OF[network]).maybeSingle()).data;
+  if (!bound) return out({ error: "bind wallet" }, 400, h);
   if (live.data && body.fresh !== true) return out({ request: live.data, existing: true }, 200, h);
   if (live.data) await admin.from("deposit_requests").update({ status: "expired", expires_at: new Date().toISOString() }).eq("request_no", live.data.request_no);
 

@@ -14,8 +14,50 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HDNodeWallet, Mnemonic, JsonRpcProvider, Wallet, Contract, SigningKey, TypedDataEncoder, parseUnits, formatUnits } from "https://esm.sh/ethers@6.13.4";
 
-const EXPLORER: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
-const txLinks = (net: string, hashes: string[]) => hashes.map((x) => (EXPLORER[net] ?? "") + x.trim()).join("\n");
+
+// ---- player messages (Telegram HTML) ----
+const EXPLORER_NAME: Record<string, string> = { TRC20: "Tronscan", BEP20: "BscScan", TON: "Tonviewer", GRAM: "Tonviewer" };
+const EXPLORER_URL: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" } as Record<string, string>)[c]);
+const fmtId = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, "$1-") : String(v ?? ""); };
+const num = (v: unknown) => String(Number(v));
+function txLinks(net: string, hashes: string[]): string {
+  return hashes.filter(Boolean).map((h, i) => `🔗 <a href="${EXPLORER_URL[net] ?? ""}${esc(h.trim())}">Открыть перевод в ${EXPLORER_NAME[net] ?? "обозревателе"}${hashes.length > 1 ? ` (${i + 1})` : ""}</a>`).join("\n");
+}
+function payAmount(w: Record<string, unknown>): string {
+  return w.coin_amount ? `${num(w.coin_amount)} GRAM` : `${num(w.amount)} USDT`;
+}
+function msgCashoutDone(w: Record<string, unknown>, hashes: string[]): string {
+  const fee = Number(w.fee ?? 0);
+  return [
+    `✅ <b>Вывод выполнен</b> · <i>Cash out completed</i>`, ``,
+    `🧾 Операция: <code>${esc(w.op_id)}</code>`,
+    `💵 Отправлено: <b>${payAmount(w)}</b> · ${esc(w.network)}`,
+    `🎰 Фишки: ${num(w.chips ?? w.amount)}${fee ? ` · комиссия ${fee} USDT` : ""}`,
+    `👛 Кошелёк: <code>${esc(w.address)}</code>`,
+    hashes.length ? txLinks(String(w.network), hashes) : ``,
+    ``, `Средства уже в пути. Спасибо, что играете в Zerake!`,
+  ].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
+}
+function msgCashoutApproved(w: Record<string, unknown>, gg: unknown): string {
+  return [
+    `🟡 <b>Вывод одобрен</b> · <i>Cash out approved</i>`, ``,
+    `🧾 Операция: <code>${esc(w.op_id)}</code>`,
+    `🎰 С ID <b>${fmtId(gg)}</b> списано фишек: ${num(w.chips ?? w.amount)}`,
+    `💵 К выплате: <b>${payAmount(w)}</b> · ${esc(w.network)}`,
+    ``, `Отправляем перевод. Как только он уйдёт, пришлём ссылку.`,
+  ].join("\n");
+}
+function msgCashoutRejected(w: Record<string, unknown>, note: string): string {
+  return [
+    `❌ <b>Вывод отклонён</b> · <i>Cash out rejected</i>`, ``,
+    `🧾 Операция: <code>${esc(w.op_id)}</code>`,
+    `💵 Сумма: ${num(w.chips ?? w.amount)}`,
+    note ? `📝 Причина: ${esc(note)}` : ``,
+    ``, `Фишки с вашего ID не списаны. Если есть вопросы, напишите в поддержку.`,
+  ].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
+}
+
 const TRON_API = "https://api.trongrid.io";
 const GAS_INDEX = 0;
 const TRX_KEEP = 30_000_000n;          // sun a paying TRON address must hold (≈30 TRX burns energy for one transfer)
@@ -222,7 +264,7 @@ async function finishGasfree(w: any, quiet = false): Promise<Response> {
   }
   await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hashes.join(","), note: null, handled_at: new Date().toISOString() }).eq("id", w.id).eq("status", "sending");
   const short = w.address.slice(0, 6) + "…" + w.address.slice(-6);
-  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\n\n${txLinks(w.network, hashes)}`);
+  await tell(admin, w.user_id, msgCashoutDone(w, hashes));
   return out({ ok: true, hashes });
 }
 
@@ -265,7 +307,7 @@ Deno.serve(async (req: Request) => {
   // ---- pay one cash out ----
   const id = Number(body.id);
   if (!Number.isInteger(id)) return out({ error: "bad id" }, 400);
-  const w = (await admin.from("withdrawals").select("id,user_id,amount,network,address,status,note").eq("id", id).maybeSingle()).data;
+  const w = (await admin.from("withdrawals").select("id,op_id,user_id,amount,chips,fee,coin_amount,network,address,status,note").eq("id", id).maybeSingle()).data;
   if (w && w.status === "sending" && String(w.note ?? "").startsWith("gf:")) {
     try { return await finishGasfree(w); } catch (e) { return out({ ok: false, reason: String(e) }); }
   }
@@ -353,7 +395,7 @@ Deno.serve(async (req: Request) => {
 
   await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hashes.join(","), handled_at: new Date().toISOString() }).eq("id", id);
   const short = w.address.slice(0, 6) + "…" + w.address.slice(-6);
-  await tell(admin, w.user_id, `✅ Cash out sent: ${Number(w.amount)} USDT (${w.network}) to ${short}\n✅ Вывод отправлен: ${Number(w.amount)} USDT (${w.network}) на ${short}\n\n${txLinks(w.network, hashes)}`);
+  await tell(admin, w.user_id, msgCashoutDone(w, hashes));
   return out({ ok: true, hashes });
 });
 
@@ -362,7 +404,7 @@ async function tell(admin: ReturnType<typeof createClient>, userId: string, text
   const tid = (await admin.auth.admin.getUserById(userId)).data?.user?.user_metadata?.telegram_id;
   if (!tid) return;
   await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: Number(tid), text, disable_web_page_preview: true }) }).catch(() => {});
+    body: JSON.stringify({ chat_id: Number(tid), text, parse_mode: "HTML", disable_web_page_preview: true }) }).catch(() => {});
 }
 async function alertStaff(admin: ReturnType<typeof createClient>, text: string) {
   const bot = Deno.env.get("TELEGRAM_BOT_TOKEN"); if (!bot) return;

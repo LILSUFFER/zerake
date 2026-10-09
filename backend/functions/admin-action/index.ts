@@ -10,8 +10,69 @@
 //   staff_list / staff_add / staff_remove -> owner only
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const EXPLORER: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
-const txLinks = (net: string, hashes: string[]) => hashes.map((x) => (EXPLORER[net] ?? "") + x.trim()).join("\n");
+
+// ---- player messages (Telegram HTML) ----
+const EXPLORER_NAME: Record<string, string> = { TRC20: "Tronscan", BEP20: "BscScan", TON: "Tonviewer", GRAM: "Tonviewer" };
+const EXPLORER_URL: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" } as Record<string, string>)[c]);
+const fmtId = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, "$1-") : String(v ?? ""); };
+const num = (v: unknown) => String(Number(v));
+function txLinks(net: string, hashes: string[]): string {
+  return hashes.filter(Boolean).map((h, i) => `🔗 <a href="${EXPLORER_URL[net] ?? ""}${esc(h.trim())}">Открыть перевод в ${EXPLORER_NAME[net] ?? "обозревателе"}${hashes.length > 1 ? ` (${i + 1})` : ""}</a>`).join("\n");
+}
+function payAmount(w: Record<string, unknown>): string {
+  return w.coin_amount ? `${num(w.coin_amount)} GRAM` : `${num(w.amount)} USDT`;
+}
+function msgCashoutDone(w: Record<string, unknown>, hashes: string[]): string {
+  const fee = Number(w.fee ?? 0);
+  return [
+    `✅ <b>Вывод выполнен</b> · <i>Cash out completed</i>`, ``,
+    `🧾 Операция: <code>${esc(w.op_id)}</code>`,
+    `💵 Отправлено: <b>${payAmount(w)}</b> · ${esc(w.network)}`,
+    `🎰 Фишки: ${num(w.chips ?? w.amount)}${fee ? ` · комиссия ${fee} USDT` : ""}`,
+    `👛 Кошелёк: <code>${esc(w.address)}</code>`,
+    hashes.length ? txLinks(String(w.network), hashes) : ``,
+    ``, `Средства уже в пути. Спасибо, что играете в Zerake!`,
+  ].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
+}
+function msgCashoutApproved(w: Record<string, unknown>, gg: unknown): string {
+  return [
+    `🟡 <b>Вывод одобрен</b> · <i>Cash out approved</i>`, ``,
+    `🧾 Операция: <code>${esc(w.op_id)}</code>`,
+    `🎰 С ID <b>${fmtId(gg)}</b> списано фишек: ${num(w.chips ?? w.amount)}`,
+    `💵 К выплате: <b>${payAmount(w)}</b> · ${esc(w.network)}`,
+    ``, `Отправляем перевод. Как только он уйдёт, пришлём ссылку.`,
+  ].join("\n");
+}
+function msgCashoutRejected(w: Record<string, unknown>, note: string): string {
+  return [
+    `❌ <b>Вывод отклонён</b> · <i>Cash out rejected</i>`, ``,
+    `🧾 Операция: <code>${esc(w.op_id)}</code>`,
+    `💵 Сумма: ${num(w.chips ?? w.amount)}`,
+    note ? `📝 Причина: ${esc(note)}` : ``,
+    ``, `Фишки с вашего ID не списаны. Если есть вопросы, напишите в поддержку.`,
+  ].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
+}
+
+function msgDepositReceived(d: Record<string, unknown>, net: string, gg: unknown): string {
+  const paid = d.coin_amount ? `${num(d.coin_amount)} GRAM (≈ $${num(d.amount)})` : `${num(d.amount)} USDT`;
+  return [
+    `✅ <b>Платёж получен</b> · <i>Payment received</i>`, ``,
+    `🧾 Операция: <code>${esc(d.op_id)}</code>`,
+    `💵 Сумма: <b>${paid}</b> · ${esc(net)}`,
+    txLinks(net, [String(d.tx_hash ?? "")]),
+    ``, `⏳ Менеджер уже отправляет фишки на ваш ID <b>${fmtId(gg)}</b>.`,
+  ].join("\n");
+}
+function msgChipsSent(d: Record<string, unknown>, gg: unknown): string {
+  return [
+    `🎰 <b>Фишки отправлены</b> · <i>Chips sent</i>`, ``,
+    `🧾 Операция: <code>${esc(d.op_id)}</code>`,
+    `🎰 Фишки: <b>${Math.floor(Number(d.amount) * 100) / 100}</b> → ID <b>${fmtId(gg)}</b>`,
+    ``, `Удачной игры за столами!`,
+  ].join("\n");
+}
+
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
 function cors(o: string | null): Record<string, string> {
   const a = o && ALLOWED.includes(o) ? o : ALLOWED[0];
@@ -33,7 +94,7 @@ async function tell(admin: ReturnType<typeof createClient>, userId: string, text
   if (!tid) return;
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: Number(tid), text, disable_web_page_preview: true }),
+    body: JSON.stringify({ chat_id: Number(tid), text, parse_mode: "HTML", disable_web_page_preview: true }),
   }).catch(() => {});
 }
 
@@ -131,23 +192,13 @@ Deno.serve(async (req: Request) => {
     // Only the first press counts, and only by whoever took it (the owner may always finish a deposit).
     const q = admin.from("deposits").update({ status: "chips_sent", handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString() })
       .eq("id", id).eq("status", "received");
-    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount");
+    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,op_id,user_id,amount,network,tx_hash");
     if (r.error) { console.error("mark_sent:", r.error.message); return out({ error: "failed" }, 500, h); }
     if ((r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
     // Tell the player the chips are on their way (works if they have started the bot).
-    const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const owner = r.data![0];
-    const pu = await admin.auth.admin.getUserById(owner.user_id);
-    const ptid = pu.data?.user?.user_metadata?.telegram_id;
     const gg = (await admin.from("profiles").select("gg_id").eq("user_id", owner.user_id).maybeSingle()).data?.gg_id ?? "";
-    if (botToken && ptid) {
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: Number(ptid), text: `🎉 Chips sent to ClubGG ID ${gg}. Good luck at the tables!
-
-🎉 Фишки отправлены на ваш ID в ClubGG ${gg}. Удачной игры!` }),
-      }).catch(() => {});
-    }
+    await tell(admin, owner.user_id, msgChipsSent(owner, gg));
     return out({ ok: true }, 200, h);
   }
 
@@ -196,12 +247,13 @@ Deno.serve(async (req: Request) => {
     if (role !== "owner" && w0.claimed_by !== u.user.id) return out({ error: "taken or already handled" }, 409, h);
     if (Math.round(typed * 100) !== Math.round(Number(w0.chips ?? w0.amount) * 100)) return out({ error: "amount mismatch" }, 400, h);
     const r = await admin.from("withdrawals").update({ status: "approved", handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString() })
-      .eq("id", id).eq("status", "pending").select("user_id,amount,network");
+      .eq("id", id).eq("status", "pending").select("op_id,user_id,amount,chips,fee,coin_amount,network,address");
     if (r.error || (r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
     const payout = await autoPay(id);
-    if (!payout.ok) await tell(admin, r.data![0].user_id, `✅ Chips taken from your ID. Your ${Number(r.data![0].amount)} USDT (${r.data![0].network}) payout is on the way.
-
-✅ Фишки сняты с вашего ID. Выплата ${Number(r.data![0].amount)} USDT (${r.data![0].network}) в пути.`);
+    if (!payout.ok) {
+      const gg = (await admin.from("profiles").select("gg_id").eq("user_id", r.data![0].user_id).maybeSingle()).data?.gg_id ?? "";
+      await tell(admin, r.data![0].user_id, msgCashoutApproved(r.data![0], gg));
+    }
     return out({ ok: true, payout }, 200, h);
   }
   if (action === "wretry") {
@@ -225,14 +277,12 @@ Deno.serve(async (req: Request) => {
       handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString(),
     }).eq("id", id).in("status", paid ? ["approved", "sending"] : ["pending"]);   // pay only after the chips were taken
     // only the person who took it (or the owner) may finish it
-    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,user_id,amount,network,address,coin_amount");
+    const r = await (role === "owner" ? q : q.or(`claimed_by.is.null,claimed_by.eq.${u.user.id}`)).select("id,op_id,user_id,amount,chips,fee,network,address,coin_amount");
     if (r.error) { console.error(action + ":", r.error.message); return out({ error: "failed" }, 500, h); }
     if ((r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
     const w = r.data![0];
     const short = w.address.length > 14 ? w.address.slice(0, 6) + "…" + w.address.slice(-6) : w.address;
-    await tell(admin, w.user_id, paid
-      ? `✅ Cash out sent: ${w.coin_amount ? Number(w.coin_amount) + " GRAM" : Number(w.amount) + " USDT"} (${w.network}) to ${short}\n✅ Вывод отправлен: ${w.coin_amount ? Number(w.coin_amount) + " GRAM" : Number(w.amount) + " USDT"} (${w.network}) на ${short}${tx ? "\n\n" + txLinks(w.network, tx.split(",")) : ""}`
-      : `⚠️ Your cash out of ${Number(w.amount)} USDT was not paid${note ? ": " + note : ""}. Please contact support.\n\n⚠️ Ваш вывод ${Number(w.amount)} USDT не выплачен${note ? ": " + note : ""}. Свяжитесь с поддержкой.`);
+    await tell(admin, w.user_id, paid ? msgCashoutDone(w, tx ? tx.split(",") : []) : msgCashoutRejected(w, note));
     return out({ ok: true }, 200, h);
   }
 

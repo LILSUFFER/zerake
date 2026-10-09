@@ -122,6 +122,36 @@ function matchRequest(f: Found, reqs: Req[], network: string): Req | undefined {
 }
 // ---- end helpers ----
 
+
+// ---- player messages (Telegram HTML) ----
+const EXPLORER_NAME: Record<string, string> = { TRC20: "Tronscan", BEP20: "BscScan", TON: "Tonviewer", GRAM: "Tonviewer" };
+const EXPLORER_URL: Record<string, string> = { TRC20: "https://tronscan.org/#/transaction/", BEP20: "https://bscscan.com/tx/", TON: "https://tonviewer.com/transaction/", GRAM: "https://tonviewer.com/transaction/" };
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" } as Record<string, string>)[c]);
+const fmtId = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); return d.length > 4 ? d.replace(/(\d{4})(?=\d)/g, "$1-") : String(v ?? ""); };
+const num = (v: unknown) => String(Number(v));
+function txLinks(net: string, hashes: string[]): string {
+  return hashes.filter(Boolean).map((h, i) => `🔗 <a href="${EXPLORER_URL[net] ?? ""}${esc(h.trim())}">Открыть перевод в ${EXPLORER_NAME[net] ?? "обозревателе"}${hashes.length > 1 ? ` (${i + 1})` : ""}</a>`).join("\n");
+}
+
+function msgDepositReceived(d: Record<string, unknown>, net: string, gg: unknown): string {
+  const paid = d.coin_amount ? `${num(d.coin_amount)} GRAM (≈ $${num(d.amount)})` : `${num(d.amount)} USDT`;
+  return [
+    `✅ <b>Платёж получен</b> · <i>Payment received</i>`, ``,
+    `🧾 Операция: <code>${esc(d.op_id)}</code>`,
+    `💵 Сумма: <b>${paid}</b> · ${esc(net)}`,
+    txLinks(net, [String(d.tx_hash ?? "")]),
+    ``, `⏳ Менеджер уже отправляет фишки на ваш ID <b>${fmtId(gg)}</b>.`,
+  ].join("\n");
+}
+function msgChipsSent(d: Record<string, unknown>, gg: unknown): string {
+  return [
+    `🎰 <b>Фишки отправлены</b> · <i>Chips sent</i>`, ``,
+    `🧾 Операция: <code>${esc(d.op_id)}</code>`,
+    `🎰 Фишки: <b>${Math.floor(Number(d.amount) * 100) / 100}</b> → ID <b>${fmtId(gg)}</b>`,
+    ``, `Удачной игры за столами!`,
+  ].join("\n");
+}
+
 const ok = (b: unknown) => new Response(JSON.stringify(b), { headers: { "Content-Type": "application/json" } });
 
 async function rpc(url: string, method: string, params: unknown[]) {
@@ -136,12 +166,12 @@ Deno.serve(async () => {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   const summary: Record<string, unknown> = {};
 
-  async function send(chatId: number, text: string, withQueueButton = false) {
+  async function send(chatId: number, text: string, withQueueButton = false, html = false) {
     if (!botToken) return;
     const markup = withQueueButton ? { inline_keyboard: [[{ text: "Open the queue", web_app: { url: "https://zerake.com/app/?tab=admin" } }]] } : undefined;
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true, reply_markup: markup }),
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true, reply_markup: markup, parse_mode: html ? "HTML" : undefined }),
     }).catch(() => {});
   }
   async function alertStaff(text: string, withQueueButton = false) {
@@ -151,7 +181,7 @@ Deno.serve(async () => {
   async function notifyUser(userId: string, text: string) {
     const u = await admin.auth.admin.getUserById(userId);
     const tid = u.data?.user?.user_metadata?.telegram_id;
-    if (tid) await send(Number(tid), text);
+    if (tid) await send(Number(tid), text, false, true);
   }
 
   // Housekeeping for every network: open -> expired after the window, expired -> closed after 24 h.
@@ -200,8 +230,9 @@ Deno.serve(async () => {
     }
     for (const d of created.filter((x) => x.status === "received")) {
       const req = reqByTx.get(d.tx_hash)!;
-      await notifyUser(d.user_id, `✅ Payment received: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"}.\nWe are sending the chips to your ClubGG ID now.\nOperation: ${d.op_id}\n\n✅ Платёж получен: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"}.\nСейчас отправим фишки на ваш ID в ClubGG.\nОперация: ${d.op_id}`);
       const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
+      await notifyUser(d.user_id, msgDepositReceived(d, c.network, p.data?.gg_id));
+
       await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"} (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
     }
     let orphanNew = 0;

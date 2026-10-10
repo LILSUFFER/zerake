@@ -202,7 +202,7 @@
       ic.innerHTML = x.kind === 'dep' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
       el.appendChild(ic);
       var left = document.createElement('div');
-      var title = document.createElement('div'); title.innerHTML = x.kind === 'dep' ? bi('Deposit', 'Депозит') : bi('Withdrawal', 'Вывод');
+      var title = document.createElement('div'); title.innerHTML = x.kind === 'dep' ? bi('Chips top-up', 'Пополнение фишек') : bi('Chips cash-out', 'Снятие фишек');
       var date = document.createElement('small'); date.textContent = new Date(x.created_at).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + (x.network || 'TRC20');
       left.appendChild(title); left.appendChild(date);
       if (x.op_id) { var oid = document.createElement('small'); oid.className = 'opid'; oid.textContent = x.op_id; oid.title = t('Tap to copy', 'Нажмите, чтобы скопировать'); oid.addEventListener('click', function () { if (navigator.clipboard) navigator.clipboard.writeText(x.op_id).then(function () { haptic('success'); oid.textContent = t('Copied', 'Скопировано'); setTimeout(function () { oid.textContent = x.op_id; }, 1200); }); }); left.appendChild(oid); }
@@ -804,14 +804,14 @@
   function renderQueue(items, wres) {
     var box = $('adm-queue'); box.innerHTML = '';
     var nNew = 0, nMine = 0;
-    if (!items.length) { box.appendChild(el('div', 'empty', bi('No deposits are waiting. Well done.', 'Заявок на депозит нет. Всё выполнено.'))); }
+    if (!items.length) { box.appendChild(el('div', 'empty', bi('No top-ups are waiting. Well done.', 'Заявок на пополнение фишек нет. Всё выполнено.'))); }
     items.forEach(function (d) {
       var free = !d.claimed_name, mine = d.mine;
       if (free) nNew++;
       if (mine) nMine++;
       var need = d.base_amount != null ? Number(d.base_amount) : Number(d.amount);
       var card = el('div', 'tcard' + (mine ? ' mine' : (!free ? ' taken' : '')));
-      card.appendChild(el('div', 'tkind', bi('Deposit', 'Депозит') + (d.op_id ? ' · <span class="opid">' + d.op_id + '</span>' : '')));
+      card.appendChild(el('div', 'tkind', bi('Chips top-up', 'Пополнение фишек') + (d.op_id ? ' · <span class="opid">' + d.op_id + '</span>' : '')));
       var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', need + ' USDT')); top.appendChild(el('div', 'tnet', d.network)); card.appendChild(top);
       var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (d.gg_id ? fid(d.gg_id) : '—') + '</b>'));
       if (d.gg_id) idr.appendChild(copyChip(fid(d.gg_id)));
@@ -857,7 +857,7 @@
       if (free) nNew++;
       if (mine) nMine++;
       var card = el('div', 'tcard wd' + (mine ? ' mine' : (!free ? ' taken' : '')));
-      card.appendChild(el('div', 'tkind', bi('Cash out', 'Вывод') + (w.op_id ? ' · <span class="opid">' + w.op_id + '</span>' : '')));
+      card.appendChild(el('div', 'tkind', bi('Chips cash-out', 'Снятие фишек') + (w.op_id ? ' · <span class="opid">' + w.op_id + '</span>' : '')));
       var top = el('div', 'trow'); top.appendChild(el('div', 'tamt', Number(w.chips) + ' ' + t('chips', 'фишек'))); top.appendChild(el('div', 'tnet', w.network)); card.appendChild(top);
       card.appendChild(el('div', 'tmeta', bi('Player gets ', 'Игрок получит ') + '<b>' + (w.coin_amount ? Number(w.coin_amount) + ' GRAM' : Number(w.amount) + ' USDT') + '</b>' + (w.coin_amount ? ' (≈ $' + Number(w.amount) + ')' : '') + (Number(w.fee) ? ' · ' + bi('fee ', 'комиссия ') + Number(w.fee) : '')));
       var idr = el('div', 'tid'); idr.appendChild(el('div', '', '<span class="muted">' + bi('ClubGG ID', 'ID в ClubGG') + '</span> <b>' + (w.gg_id ? fid(w.gg_id) : '—') + '</b>'));

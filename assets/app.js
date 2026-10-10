@@ -3,8 +3,8 @@
   var C = window.ZERAKE || {};
   var MIN_DEPOSIT = C.minDeposit || 10;
   var MIN_WITHDRAW = C.minWithdraw || 10;
-  var ADDR_RE = { TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BEP20: /^0x[0-9a-fA-F]{40}$/, TON: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/ };
-  var PLACEHOLDER = { TRC20: 'T...', BEP20: '0x...', TON: 'UQ...' };
+  var ADDR_RE = { TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BEP20: /^0x[0-9a-fA-F]{40}$/, TON: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/, GRAM: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/ };
+  var PLACEHOLDER = { TRC20: 'T...', BEP20: '0x...', TON: 'UQ...', GRAM: 'UQ...' };
   var ADDR_HINT = {
     TRC20: ['Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).'],
     BEP20: ['Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).'],

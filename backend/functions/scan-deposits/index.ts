@@ -99,14 +99,15 @@ function parseTonTransfers(items: Array<Record<string, unknown>>, ownerRaw: stri
 function parseTonNative(items: Array<Record<string, any>>, ownerRaw: string | Set<string>): Found[] {   // deno-lint-ignore no-explicit-any
   const owners = typeof ownerRaw === "string" ? new Set([ownerRaw.toUpperCase()]) : ownerRaw;
   return items
-    .filter((t) => t.in_msg && t.in_msg.source && BigInt(t.in_msg.value ?? 0) > 0n && !t.description?.aborted && owners.has(String(t.in_msg.destination ?? t.account).toUpperCase()))
+    // a new (not yet active) wallet shows incoming money as "aborted", yet credits it: count what was really credited, unless it bounced back
+    .filter((t) => t.in_msg && t.in_msg.source && BigInt(t.description?.credit_ph?.credit ?? 0) > 0n && !t.description?.bounce && owners.has(String(t.in_msg.destination ?? t.account).toUpperCase()))
     .map((t) => {
       const d = t.in_msg.message_content?.decoded;
       return {
         tx_hash: b64ToHex(String(t.hash)),
         from: String(t.in_msg.source).toUpperCase(),
         to: String(t.in_msg.destination ?? t.account).toUpperCase(),
-        amount: toAmount(String(t.in_msg.value), 9),
+        amount: toAmount(String(t.description?.credit_ph?.credit ?? t.in_msg.value), 9),
         comment: d && d.type === "text_comment" ? String(d.comment ?? "").trim() : undefined,
       };
     });
@@ -221,7 +222,7 @@ Deno.serve(async () => {
       const ins = await admin.from("deposits").upsert({
         user_id: uid, network: c.network, tx_hash: f.tx_hash, from_address: f.from, to_address: f.to, request_id: null,
         amount: usd.toFixed(6), coin_amount: c.network === "GRAM" ? f.amount : null, from_bound: fromBound,
-        status: usd >= Number(c.min_deposit) ? "received" : "below_min",
+        status: usd >= Number(c.min_deposit) * (c.network === "GRAM" ? 0.97 : 1) ? "received" : "below_min",   // GRAM: 3% for the rate moving
       }, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,coin_amount,status,from_bound,from_address");
       if (ins.error) throw new Error("save: " + ins.error.message);
       const d = ins.data?.[0]; if (!d) continue;

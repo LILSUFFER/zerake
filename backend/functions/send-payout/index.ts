@@ -6,6 +6,8 @@
 //     covers the whole amount is used; if none does, several addresses pay parts (largest first).
 //   * The club pays the network fee: a "gas" address (index 0 of the same seed) tops up TRX / BNB on the
 //     paying address right before the transfer.
+//   * TON network (USDT-TON and GRAM): paid from the club TON wallet (secret TON_MNEMONIC, 24 words);
+//     its address must equal chain_config.receive_address. The fee is paid in GRAM from that wallet.
 //   * Safety: one payout and a daily total are capped (chain_config.auto_max / auto_daily); above that the
 //     request stays for a manager to pay by hand. If something fails after money was sent, the request is
 //     left as "sending" for a human to check, so the same cash out can never be paid twice.
@@ -13,6 +15,8 @@
 // Secrets: WALLET_MNEMONIC (the seed of the deposit addresses), optional TRONGRID_API_KEY.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HDNodeWallet, Mnemonic, JsonRpcProvider, Wallet, Contract, SigningKey, TypedDataEncoder, parseUnits, formatUnits } from "https://esm.sh/ethers@6.13.4";
+import { TonClient, WalletContractV4, WalletContractV5R1, internal, Address, beginCell, toNano, SendMode } from "https://esm.sh/@ton/ton@15.1.0";
+import { mnemonicToPrivateKey } from "https://esm.sh/@ton/crypto@3.3.0";
 
 
 // ---- player messages (Telegram HTML) ----
@@ -268,6 +272,71 @@ async function finishGasfree(w: any, quiet = false): Promise<Response> {
   return out({ ok: true, hashes });
 }
 
+/** USDT-TON or GRAM from the club TON wallet. Returns a Response; never pays twice (row is "sending"). */
+// deno-lint-ignore no-explicit-any
+async function payTon(w: any, cfg: any): Promise<Response> {
+  const words = (Deno.env.get("TON_MNEMONIC") ?? "").trim().split(/\s+/);
+  if (words.length !== 24) return await back("auto payout is off for TON (no TON wallet key)");
+  let sent = false;
+  try {
+    const key = await mnemonicToPrivateKey(words);
+    const club = Address.parse(cfg.receive_address);
+    const wallet = [WalletContractV5R1.create({ workchain: 0, publicKey: key.publicKey }), WalletContractV4.create({ workchain: 0, publicKey: key.publicKey })]
+      .find((x) => x.address.equals(club));
+    if (!wallet) return await back("the TON wallet key does not match the club wallet address");
+    const apiKey = Deno.env.get("TONCENTER_API_KEY");
+    const client = new TonClient({ endpoint: "https://toncenter.com/api/v2/jsonRPC", apiKey: apiKey || undefined });
+    const contract = client.open(wallet);
+    const gramBal = await client.getBalance(wallet.address);
+    const to = Address.parse(w.address);
+    let msg;
+    if (w.network === "GRAM") {
+      const value = toNano(String(w.coin_amount));
+      if (gramBal < value + toNano("0.02")) return await back("not enough GRAM on the club wallet");
+      msg = internal({ to, value, bounce: false, body: `Zerake ${w.op_id}` });
+    } else {
+      // USDT-TON: a jetton transfer from the club's USDT wallet
+      if (gramBal < toNano("0.06")) return await back("not enough GRAM on the club wallet to pay the network fee");
+      const master = Address.parse(cfg.usdt_contract);
+      const jw = (await client.runMethod(master, "get_wallet_address", [{ type: "slice", cell: beginCell().storeAddress(wallet.address).endCell() }])).stack.readAddress();
+      const units = BigInt(Math.round(Number(w.amount) * 10 ** Number(cfg.decimals)));
+      const jbal = (await client.runMethod(jw, "get_wallet_data")).stack.readBigNumber();
+      if (jbal < units) return await back("not enough USDT on the club TON wallet");
+      const body = beginCell()
+        .storeUint(0xf8a7ea5, 32).storeUint(BigInt(w.id), 64).storeCoins(units)
+        .storeAddress(to).storeAddress(wallet.address).storeBit(0).storeCoins(1n)
+        .storeBit(1).storeRef(beginCell().storeUint(0, 32).storeStringTail(`Zerake ${w.op_id}`).endCell())
+        .endCell();
+      msg = internal({ to: jw, value: toNano("0.05"), bounce: true, body });
+    }
+    const seqno = await contract.getSeqno();
+    await contract.sendTransfer({ seqno, secretKey: key.secretKey, sendMode: SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS, messages: [msg] });
+    sent = true;
+    await admin.from("withdrawals").update({ note: "ton: sent, waiting for the chain" }).eq("id", w.id);
+    // wait until the wallet's seqno moves on, then take the newest transaction as the proof
+    let done = false;
+    for (let i = 0; i < 20 && !done; i++) { await sleep(3000); try { done = (await contract.getSeqno()) > seqno; } catch { /* retry */ } }
+    if (!done) throw new Error("not confirmed within a minute");
+    let hash = "";
+    try {
+      const h: Record<string, string> = {}; if (apiKey) h["X-API-Key"] = apiKey;
+      const r = await fetch(`https://toncenter.com/api/v3/transactions?account=${encodeURIComponent(wallet.address.toRawString())}&limit=1&sort=desc`, { headers: h });
+      const t = (await r.json()).transactions?.[0];
+      if (t?.hash) hash = Array.from(Uint8Array.from(atob(String(t.hash).replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)), (b) => b.toString(16).padStart(2, "0")).join("");
+    } catch { /* the payout is done anyway */ }
+    await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hash || null, note: null, handled_at: new Date().toISOString() }).eq("id", w.id);
+    await tell(admin, w.user_id, msgCashoutDone(w, hash ? [hash] : []));
+    return out({ ok: true, hashes: hash ? [hash] : [] });
+  } catch (e) {
+    const m = String((e as Error)?.message ?? e).slice(0, 250);
+    console.error("ton payout", w.id, m);
+    if (!sent) return await back("auto payout failed: " + m);
+    await admin.from("withdrawals").update({ note: "CHECK BY HAND (TON): sent but " + m }).eq("id", w.id);
+    await alertStaff(admin, `⚠️ TON payout #${w.id} (${w.op_id}) was sent but not confirmed: ${m}\nCheck the club wallet in Tonviewer.`);
+    return out({ ok: false, reason: "sent, not confirmed: check by hand" });
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return out({ error: "method" }, 405);
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -280,7 +349,7 @@ Deno.serve(async (req: Request) => {
   let mn: Mnemonic | null = null;
   try { if (phrase) mn = Mnemonic.fromPhrase(phrase); } catch { mn = null; }
   node = (coin: number, i: number) => HDNodeWallet.fromMnemonic(mn!, `m/44'/${coin}'/0'/0/${i}`);
-  const cfgs = (await admin.from("chain_config").select("network,rpc_url,usdt_contract,decimals,auto_max,auto_daily")).data ?? [];
+  const cfgs = (await admin.from("chain_config").select("network,rpc_url,usdt_contract,decimals,auto_max,auto_daily,receive_address")).data ?? [];
   const cfgOf = (n: string) => cfgs.find((c) => c.network === n)!;
 
   // ---- wallet overview for the owner (gas addresses, balances) ----
@@ -316,9 +385,15 @@ Deno.serve(async (req: Request) => {
     await admin.from("withdrawals").update({ status: "approved", note: reason }).eq("id", id).eq("status", "sending");
     return out({ ok: false, reason });
   };
-  if (!mn) return out({ ok: false, reason: "auto payout is off (no wallet key)" });
-  if (w.network === "TON") return out({ ok: false, reason: "TON is paid by hand" });
   const cfg = cfgOf(w.network);
+  if (w.network === "TON" || w.network === "GRAM") {
+    if (!cfg?.receive_address) return out({ ok: false, reason: "the club TON wallet is not set" });
+    if (Number(w.amount) > Number(cfg.auto_max)) return out({ ok: false, reason: `over the auto limit (${Number(cfg.auto_max)} USDT), pay by hand` });
+    const lockT = await admin.from("withdrawals").update({ status: "sending", note: null }).eq("id", id).eq("status", "approved").select("id");
+    if ((lockT.data?.length ?? 0) !== 1) return out({ ok: false, reason: "already being paid" });
+    return await payTon(w, cfg);
+  }
+  if (!mn) return out({ ok: false, reason: "auto payout is off (no wallet key)" });
   if (Number(w.amount) > Number(cfg.auto_max)) return out({ ok: false, reason: `over the auto limit (${Number(cfg.auto_max)} USDT), pay by hand` });
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
   const day = (await admin.from("withdrawals").select("amount").eq("auto", true).eq("status", "paid").gte("handled_at", since)).data ?? [];

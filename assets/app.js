@@ -17,6 +17,7 @@
   var CHAIN_NAME = { TRON: 'Tron (TRC20)', BSC: 'BNB Chain (BEP20)', TON: 'TON' };
   var wallets = {}, walletsLoaded = false;
   var net = 'TRC20';
+  document.body.dataset.tab = 'deposit';
   var tg = window.Telegram && window.Telegram.WebApp;
   var $ = function (id) { return document.getElementById(id); };
   var sb = null, me = null, ggId = '';
@@ -168,6 +169,7 @@
     document.querySelectorAll('.coinname').forEach(function (e) { e.textContent = coin; });
     $('req-net').textContent = coin + ' · ' + chain;
     document.querySelectorAll('.mindep').forEach(function (e) { e.textContent = net === 'GRAM' ? 5 : MIN_DEPOSIT; });
+    document.querySelectorAll('.minwd').forEach(function (e) { e.textContent = net === 'GRAM' ? 5 : MIN_WITHDRAW; });
     applyWallet();
     $('wmsg').hidden = true;
     feePreview();
@@ -559,7 +561,8 @@
     var amount = Number(String($('wamt').value).replace(',', '.'));
     var address = $('waddr').value.trim();
     if (!ggId) { wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true); return; }
-    if (!(amount >= MIN_WITHDRAW)) { wmsg('Minimum withdrawal is ' + MIN_WITHDRAW + ' USDT.', 'Минимальный вывод: ' + MIN_WITHDRAW + ' USDT.', true); return; }
+    var minW = net === 'GRAM' ? 5 : MIN_WITHDRAW;
+    if (!(amount >= minW)) { wmsg('Minimum cash out is $' + minW + '.', 'Минимальный вывод: $' + minW + '.', true); return; }
     if (!ADDR_RE[net].test(address)) { wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true); return; }
     if (hasPin && !sessionPin) { openLock('confirm', function (p) { if (p) $('wform').requestSubmit(); }); return; }
     $('wsubmit').disabled = true;

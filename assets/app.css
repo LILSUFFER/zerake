@@ -170,7 +170,7 @@ input:focus { outline: none; border-color: var(--green-line); box-shadow: 0 0 0 
 /* three calm states of the deposit screen: form, paying, paid */
 #tab-deposit.st-open .steps, #tab-deposit.st-open .hints,
 #tab-deposit.st-paid .steps, #tab-deposit.st-paid .hints { display: none !important; }
-body.paid-view #nets { display: none; }
+body.paid-view[data-tab="deposit"] #nets { display: none; }
 #tab-deposit.st-paid #rv-new { background: none; border: 0; color: var(--soft); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; padding: 6px; box-shadow: none; }
 #tab-deposit.st-paid .paidbox { padding: 34px 22px; }
 

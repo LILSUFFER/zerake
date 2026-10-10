@@ -202,7 +202,7 @@
     var box = $('ps-live'); if (!box) return;
     var x = list.filter(function (d) {
       var age = Date.now() - new Date(d.created_at).getTime();
-      return d.network === net && age < (d.status === 'chips_sent' ? 15 * 60e3 : 24 * 3600e3);
+      return d.network === net && age < (d.status === 'chips_sent' ? 15 * 60e3 : 2 * 3600e3);   // only fresh ones; the rest is in History
     })[0];
     if (!x) { box.hidden = true; return; }
     var sum = Math.floor(Number(x.amount) * 100) / 100 + ' USDT' + (x.coin_amount ? ' (' + Number(x.coin_amount) + ' GRAM)' : '');

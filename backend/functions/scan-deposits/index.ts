@@ -299,7 +299,8 @@ Deno.serve(async () => {
   }
 
   const { data: chains } = await admin.from("chain_config").select("*").eq("enabled", true);
-  for (const c of chains ?? []) {
+  // all networks at the same time, so a slow one never holds up the others
+  await Promise.all((chains ?? []).map(async (c) => {
     try {
       const st = await admin.from("scan_state").select("cursor").eq("network", c.network).maybeSingle();
       const cursor = Number(st.data?.cursor ?? 0);
@@ -312,7 +313,7 @@ Deno.serve(async () => {
       if (c.network === "TRC20") {
         const recv = await admin.from("address_pool").select("address").eq("network", "TRC20").eq("status", "receiving");
         const addrs = new Set<string>([...reqs.map((r) => r.address), ...(recv.data ?? []).map((r) => r.address)]);
-        if (addrs.size === 0) { summary[c.network] = "no addresses"; continue; }
+        if (addrs.size === 0) { summary[c.network] = "no addresses"; return; }
         scanned = addrs.size;
         // 15-minute overlap so late confirmations are not missed (payments are recorded once anyway).
         const sinceMs = cursor ? cursor - 15 * 60 * 1000 : Date.now() - 60 * 60 * 1000;
@@ -329,7 +330,7 @@ Deno.serve(async () => {
       } else if (c.network === "BEP20") {
         const recv = await admin.from("address_pool").select("address").eq("network", "BEP20").eq("status", "receiving");
         const addrs = [...new Set<string>([...reqs.map((r) => r.address), ...(recv.data ?? []).map((r) => r.address)].map((a) => a.toLowerCase()))];
-        if (addrs.length === 0) { summary[c.network] = "no addresses"; continue; }
+        if (addrs.length === 0) { summary[c.network] = "no addresses"; return; }
         scanned = addrs.length;
         const latest = parseInt(await rpc(c.rpc_url, "eth_blockNumber", []), 16);
         const safe = latest - c.confirmations;
@@ -347,7 +348,7 @@ Deno.serve(async () => {
           newCursor = to;
         }
       } else if (c.network === "TON") {
-        if (!c.receive_address) { summary[c.network] = "no wallet address set"; continue; }
+        if (!c.receive_address) { summary[c.network] = "no wallet address set"; return; }
         scanned = 1;
         const owner = tonToRaw(c.receive_address).toUpperCase();
         const pw = (await admin.from("ton_deposit_wallets").select("user_id,raw")).data ?? [];
@@ -372,7 +373,7 @@ Deno.serve(async () => {
         summary[c.network + "_personal"] = pers;
         newCursor = Date.now();
       } else if (c.network === "GRAM") {
-        if (!c.receive_address) { summary[c.network] = "no wallet address set"; continue; }
+        if (!c.receive_address) { summary[c.network] = "no wallet address set"; return; }
         scanned = 1;
         const owner = tonToRaw(c.receive_address).toUpperCase();
         const pw = (await admin.from("ton_deposit_wallets").select("user_id,raw")).data ?? [];
@@ -406,6 +407,6 @@ Deno.serve(async () => {
       console.error("scan", c.network, String(e));
       summary[c.network] = "error: " + String(e);
     }
-  }
+  }));
   return ok(summary);
 });

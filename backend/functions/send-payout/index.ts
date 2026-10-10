@@ -319,14 +319,16 @@ async function payTon(w: any, cfg: any): Promise<Response> {
     if (!plan) return await back(isGram ? "not enough GRAM on the club addresses" : "not enough USDT on the club TON addresses");
 
     const clubC = client.open(club);
-    for (const part of plan) {
-      const src = wallets.find((x) => x.index === part.index)!;
+    // one transfer from `src` to `dest`; waits until the network confirms it
+    // deno-lint-ignore no-explicit-any
+    const transfer = async (src: { contract: any; index: number; club: boolean }, dest: Address, units: bigint, final: boolean) => {
       const c = client.open(src.contract);
       let msg;
       if (isGram) {
-        msg = internal({ to, value: part.units, bounce: false, body: `Zerake ${w.op_id}` });
+        msg = internal({ to: dest, value: units, bounce: false, body: final ? `Zerake ${w.op_id}` : "Zerake merge" });
       } else {
-        if (!src.club && (gramOf.get(src.index) ?? 0n) < toNano("0.06")) {      // the club pays the fee for this address
+        if (!src.club && (await client.getBalance(src.contract.address)) < toNano("0.06")) {      // the club pays the fee for this address
+          await pause();
           const s0 = await clubC.getSeqno(); await pause();
           await clubC.sendTransfer({ seqno: s0, secretKey: key.secretKey, sendMode: SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS,
             messages: [internal({ to: src.contract.address, value: toNano("0.07"), bounce: false, body: "Zerake fee" })] });
@@ -334,27 +336,47 @@ async function payTon(w: any, cfg: any): Promise<Response> {
           for (let i = 0; i < 20 && !ok; i++) { await sleep(3000); try { ok = (await client.getBalance(src.contract.address)) >= toNano("0.06"); } catch { /* retry */ } }
           if (!ok) throw new Error("the fee top-up did not arrive");
         }
+        await pause();
         const jw = await jettonWallet(src.contract.address); await pause();
         const body = beginCell()
-          .storeUint(0xf8a7ea5, 32).storeUint(BigInt(w.id), 64).storeCoins(part.units)
-          .storeAddress(to).storeAddress(clubAddr).storeBit(0).storeCoins(1n)
-          .storeBit(1).storeRef(beginCell().storeUint(0, 32).storeStringTail(`Zerake ${w.op_id}`).endCell())
+          .storeUint(0xf8a7ea5, 32).storeUint(BigInt(w.id), 64).storeCoins(units)
+          .storeAddress(dest).storeAddress(clubAddr).storeBit(0).storeCoins(final ? 1n : 0n)
+          .storeBit(1).storeRef(beginCell().storeUint(0, 32).storeStringTail(final ? `Zerake ${w.op_id}` : "Zerake merge").endCell())
           .endCell();
         msg = internal({ to: jw, value: toNano("0.05"), bounce: true, body });
       }
       const seqno = await c.getSeqno().catch(() => 0); await pause();
       await c.sendTransfer({ seqno, secretKey: key.secretKey, sendMode: SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS, messages: [msg] });
-      sent = true;
+      if (final) sent = true;
       let done = false;
       for (let i = 0; i < 20 && !done; i++) { await sleep(3000); try { done = (await c.getSeqno()) > seqno; } catch { /* retry */ } }
       if (!done) throw new Error("a transfer was not confirmed within a minute");
+      if (!final) return;
       try {
         const h: Record<string, string> = {}; if (apiKey) h["X-API-Key"] = apiKey;
         const r = await fetch(`https://toncenter.com/api/v3/transactions?account=${encodeURIComponent(src.contract.address.toRawString())}&limit=1&sort=desc`, { headers: h });
         const t = (await r.json()).transactions?.[0];
         if (t?.hash) hashes.push(Array.from(Uint8Array.from(atob(String(t.hash).replace(/-/g, "+").replace(/_/g, "/")), (ch) => ch.charCodeAt(0)), (b) => b.toString(16).padStart(2, "0")).join(""));
       } catch { /* the payout is done anyway */ }
+    };
+
+    // The player always gets ONE transfer: if the money sits on several addresses,
+    // first merge it onto the address holding the most, then pay from there.
+    const target = wallets.find((x) => x.index === plan[0].index)!;
+    if (plan.length > 1) {
+      for (const part of plan.slice(1)) await transfer(wallets.find((x) => x.index === part.index)!, target.contract.address, part.units, false);
+      let ok = false;
+      for (let i = 0; i < 30 && !ok; i++) {
+        await sleep(3000);
+        try {
+          ok = isGram
+            ? (await client.getBalance(target.contract.address)) - (target.club ? toNano("0.1") : toNano("0.02")) >= need
+            : (await client.runMethod(await jettonWallet(target.contract.address), "get_wallet_data")).stack.readBigNumber() >= need;
+        } catch { /* retry */ }
+      }
+      if (!ok) throw new Error("the merged money did not arrive on one address within 90 seconds");
     }
+    await transfer(target, to, need, true);
     await admin.from("withdrawals").update({ status: "paid", auto: true, tx_hash: hashes.join(",") || null, note: null, handled_at: new Date().toISOString() }).eq("id", w.id);
     await tell(admin, w.user_id, msgCashoutDone(w, hashes));
     return out({ ok: true, hashes });

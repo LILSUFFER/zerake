@@ -1014,6 +1014,8 @@
     if (full) loadLog();
     if (staffRole === 'owner') {
       $('adm-owner').hidden = false;
+      $('adm-ops-card').hidden = false;
+      if (full || !opsLoaded) { if (!opsLoaded) fillOpsStatus(); opsLoaded = true; loadOps(); }
       if (full && !window.__showWallets && !$('adm-wallet').children.length) {
         var wb = btn('', bi('Show club wallet balances', 'Показать балансы кошельков клуба'), function () { window.__showWallets = true; $('adm-wallet').innerHTML = ''; loadAdmin(true); });
         $('adm-wallet').appendChild(wb);
@@ -1076,6 +1078,77 @@
       box.appendChild(row);
     });
   }
+  /* ---------- all operations (owner): search, filter and change a status by hand ---------- */
+  var OPS_ST = {
+    dep: [['received', 'Paid, chips not sent', 'Оплачено, фишки не выданы'], ['chips_sent', 'Chips sent', 'Фишки выданы'], ['below_min', 'Below the minimum', 'Меньше минимума']],
+    wd: [['pending', 'Waiting for chips to be taken', 'Ждёт снятия фишек'], ['approved', 'Chips taken, paying out', 'Фишки сняты, выплата'], ['sending', 'Sending', 'Отправляется'], ['paid', 'Paid', 'Выплачено'], ['rejected', 'Rejected', 'Отклонено']]
+  };
+  var OPS_SET = { dep: ['received', 'chips_sent', 'below_min'], wd: ['pending', 'paid', 'rejected'] };
+  var opsLoaded = false;
+  function opsLabel(kind, st) { var x = OPS_ST[kind].filter(function (s) { return s[0] === st; })[0]; return x ? t(x[1], x[2]) : st; }
+  function opsOption(value, text) { var o = el('option', '', null); o.value = value; o.textContent = text; return o; }
+  function fillOpsStatus() {
+    var k = $('ops-kind').value, s = $('ops-status'), cur = s.value;
+    s.innerHTML = '';
+    s.appendChild(opsOption('', t('All statuses', 'Все статусы')));
+    OPS_ST[k].forEach(function (x) { s.appendChild(opsOption(x[0], t(x[1], x[2]))); });
+    if (OPS_ST[k].some(function (x) { return x[0] === cur; })) s.value = cur;
+  }
+  function opsDate(iso) { return iso ? new Date(iso).toLocaleString(document.body.dataset.lang === 'ru' ? 'ru-RU' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''; }
+  async function loadOps() {
+    var box = $('ops-list'); if (!box) return;
+    var kind = $('ops-kind').value;
+    var r = await adminCall({ action: 'ops', kind: kind, status: $('ops-status').value, q: $('ops-q').value });
+    box.innerHTML = '';
+    if (!r.ok) { box.appendChild(el('div', 'note bad', bi('Could not load operations.', 'Не удалось загрузить операции.'))); return; }
+    var items = r.data.items || [], ex = r.data.explorer || {};
+    if (!items.length) { box.appendChild(el('div', 'tmeta', bi('Nothing found.', 'Ничего не найдено.'))); return; }
+    items.forEach(function (x) {
+      var row = el('div', 'logrow', null), head = el('div', 'loghead', null);
+      var l = el('div', '', null), nm = el('b', '', null); nm.textContent = x.op_id || '#' + x.id; l.appendChild(nm);
+      var who = x.handled_name ? ' · ' + x.handled_name : x.claimed_name ? ' · ' + t('taken by ', 'взял ') + x.claimed_name : '';
+      var sub = el('small', '', null); sub.textContent = (x.gg_id ? 'ID ' + fid(x.gg_id) + ' · ' : '') + x.network + ' · ' + opsDate(x.created_at) + who; l.appendChild(sub);
+      var coin = x.coin_amount ? ' (' + Number(x.coin_amount) + ' GRAM)' : '';
+      var amt = kind === 'dep' ? Math.floor(Number(x.amount) * 100) / 100 + ' USDT' + coin : Number(x.chips != null ? x.chips : x.amount) + ' → ' + Number(x.amount) + ' USDT' + coin;
+      var rr = el('div', 'logr', null), ab = el('b', '', null); ab.textContent = amt; rr.appendChild(ab);
+      rr.appendChild(el('small', 'opsst s-' + x.status, opsLabel(kind, x.status)));
+      head.appendChild(l); head.appendChild(rr); row.appendChild(head);
+
+      var det = el('div', 'opsdet', null); det.hidden = true;
+      var keep = kind === 'dep' ? ['from_address', 'to_address', 'tx_hash'] : ['address', 'fee', 'tx_hash', 'note'];
+      var pre = el('pre', 'logdet', null);
+      pre.textContent = [t('Status: ', 'Статус: ') + opsLabel(kind, x.status)]
+        .concat(keep.filter(function (k) { return x[k] != null && x[k] !== ''; }).map(function (k) { return k + ': ' + x[k]; }))
+        .concat(x.handled_at ? [t('Done: ', 'Выполнено: ') + opsDate(x.handled_at)] : []).join('\n');
+      det.appendChild(pre);
+      if (x.tx_hash && ex[x.network]) String(x.tx_hash).split(',').forEach(function (hsh, i, all) {
+        var a = el('a', '', null); a.href = ex[x.network] + hsh.trim(); a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = t('Open the transfer', 'Открыть перевод') + (all.length > 1 ? ' ' + (i + 1) : '') + ' ↗'; det.appendChild(a);
+      });
+      var chg = el('div', 'opschg', null), sel = el('select', '', null);
+      OPS_SET[kind].filter(function (s) { return s !== x.status; }).forEach(function (s) { sel.appendChild(opsOption(s, opsLabel(kind, s))); });
+      var go = btn('', bi('Set status', 'Сменить статус'), function (b) {
+        var to = sel.value, name = x.op_id || '#' + x.id;
+        b.disabled = false;
+        ask('Change ' + name + ' to "' + opsLabel(kind, to) + '"? Only the record changes: no chips and no money are moved.',
+            'Сменить статус ' + name + ' на «' + opsLabel(kind, to) + '»? Меняется только запись: фишки и деньги никуда не отправляются.', async function () {
+          b.disabled = true;
+          var res = await adminCall({ action: 'set_status', kind: kind, id: x.id, status: to });
+          b.disabled = false;
+          if (res.ok) { haptic('success'); toast(t('Status changed.', 'Статус изменён.')); loadOps(); loadAdmin(false); }
+          else { haptic('error'); toast(t('Could not change the status.', 'Не удалось сменить статус.') + (res.data && res.data.error ? ' ' + res.data.error : ''), 'bad'); }
+        });
+      });
+      chg.appendChild(sel); chg.appendChild(go); det.appendChild(chg);
+      row.appendChild(det);
+      head.addEventListener('click', function () { det.hidden = !det.hidden; });
+      box.appendChild(row);
+    });
+  }
+  $('ops-kind').addEventListener('change', function () { fillOpsStatus(); loadOps(); });
+  $('ops-status').addEventListener('change', loadOps);
+  $('ops-form').addEventListener('submit', function (e) { e.preventDefault(); loadOps(); });
+
   async function checkStaff() {
     try {
       var r = await adminCall({ action: 'whoami' });

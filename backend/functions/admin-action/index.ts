@@ -7,6 +7,7 @@
 //   mark_sent    -> mark one deposit "chips sent" (only the person who took it, or the owner)
 //   wqueue / wdone / wclaim / wrelease / wpaid / wreject -> cash-out requests (same idea as deposits)
 //   unmatched    -> payments no request matches;  resolve -> mark one as handled
+//   ops / set_status -> every operation with search and filters; change a status by hand (owner only)
 //   staff_list / staff_add / staff_remove -> owner only
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -302,6 +303,52 @@ Deno.serve(async (req: Request) => {
     const prof = ids.length ? (await admin.from("profiles").select("user_id,gg_id").in("user_id", ids)).data ?? [] : [];
     const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
     return out({ items: (rows ?? []).map((r) => ({ ...r, gg_id: gg.get(r.row_data?.user_id) ?? null })) }, 200, h);
+  }
+
+  // ---- all operations: one list of every top-up and cash out, with search and filters (owner only) ----
+  if (action === "ops") {
+    if (role !== "owner") return out({ error: "owner only" }, 403, h);
+    const kind = body.kind === "wd" ? "wd" : "dep";
+    const status = String(body.status ?? "").replace(/[^a-z_]/g, "");
+    const term = String(body.q ?? "").trim().replace(/[^A-Za-z0-9-]/g, "").slice(0, 40);
+    const table = kind === "dep" ? "deposits" : "withdrawals";
+    const cols = kind === "dep"
+      ? "id,op_id,user_id,amount,coin_amount,network,status,claimed_name,handled_name,handled_at,created_at,tx_hash,from_address,to_address"
+      : "id,op_id,user_id,amount,chips,fee,coin_amount,network,status,address,claimed_name,handled_name,handled_at,created_at,tx_hash,note";
+    let q = admin.from(table).select(cols).order("created_at", { ascending: false }).limit(100);
+    if (status) q = q.eq("status", status);
+    if (term) {
+      const digits = term.replace(/-/g, "");
+      const users = /^\d{4,12}$/.test(digits) ? ((await admin.from("profiles").select("user_id").eq("gg_id", digits)).data ?? []).map((p) => p.user_id) : [];
+      q = users.length ? q.in("user_id", users) : q.ilike("op_id", `%${term}%`);
+    }
+    const { data, error } = await q;
+    if (error) { console.error("ops:", error.message); return out({ error: "failed" }, 500, h); }
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const ids = [...new Set(rows.map((r) => r.user_id as string))];
+    const prof = ids.length ? (await admin.from("profiles").select("user_id,gg_id").in("user_id", ids)).data ?? [] : [];
+    const gg = new Map(prof.map((p) => [p.user_id, p.gg_id]));
+    const ex = (await admin.from("chain_config").select("network,explorer_tx")).data ?? [];
+    return out({ explorer: Object.fromEntries(ex.map((e) => [e.network, e.explorer_tx])), items: rows.map((r) => ({ ...r, user_id: undefined, gg_id: gg.get(r.user_id as string) ?? null })) }, 200, h);
+  }
+  // Change the status of one operation by hand (owner only). It changes the record only: no chips and no money move.
+  // Every change lands in the operations log (ops_log triggers).
+  if (action === "set_status") {
+    if (role !== "owner") return out({ error: "owner only" }, 403, h);
+    const id = Number(body.id);
+    const kind = body.kind === "wd" ? "wd" : "dep";
+    const status = String(body.status ?? "");
+    const allowed = kind === "dep" ? ["received", "chips_sent", "below_min"] : ["pending", "paid", "rejected"];
+    if (!Number.isInteger(id) || !allowed.includes(status)) return out({ error: "bad request" }, 400, h);
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { status };
+    if (status === "received" || status === "pending") Object.assign(patch, { claimed_by: null, claimed_name: null, claimed_at: null });   // back to the queue, free for anyone
+    if (status === "chips_sent" || status === "paid" || status === "rejected") Object.assign(patch, { handled_by: u.user.id, handled_name: myName, handled_at: now });
+    if (kind === "wd" && body.note) patch.note = String(body.note).trim().slice(0, 300);
+    const r = await admin.from(kind === "dep" ? "deposits" : "withdrawals").update(patch).eq("id", id).select("id");
+    if (r.error) { console.error("set_status:", r.error.message); return out({ error: r.error.message }, 500, h); }
+    if ((r.data?.length ?? 0) !== 1) return out({ error: "not found" }, 404, h);
+    return out({ ok: true }, 200, h);
   }
 
   if (action === "unmatched") {

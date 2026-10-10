@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=43">
+<link rel="stylesheet" href="../assets/app.css?v=44">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -236,6 +236,18 @@
       <div class="label"><span class="en">Done recently</span><span class="ru">Недавно выполнено</span></div>
       <div class="stack" id="adm-done"></div>
     </div>
+    <div class="card" id="adm-ops-card" hidden>
+      <div class="label"><span class="en">All operations</span><span class="ru">Все операции</span></div>
+      <div class="opsbar">
+        <select id="ops-kind"><option value="dep">Пополнения фишек</option><option value="wd">Снятия фишек</option></select>
+        <select id="ops-status"></select>
+      </div>
+      <form class="addstaff" id="ops-form" autocomplete="off">
+        <input id="ops-q" placeholder="DEP-… / WD-… / ClubGG ID" spellcheck="false" autocapitalize="off">
+        <button class="btn" type="submit"><span class="en">Find</span><span class="ru">Найти</span></button>
+      </form>
+      <div class="loglist" id="ops-list"></div>
+    </div>
     <div class="card" id="adm-logcard">
       <div class="label"><span class="en">Operations log</span><span class="ru">Журнал операций</span></div>
       <form class="addstaff" id="adm-logform" autocomplete="off">
@@ -362,6 +374,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=51"></script>
+<script src="../assets/app.js?v=52"></script>
 </body>
 </html>

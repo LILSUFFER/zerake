@@ -351,3 +351,4 @@ body[data-tab="settings"] #pinprompt, body[data-tab="settings"] #nocode, body[da
 body.personal-net #trc-flow, body.personal-net #tab-deposit .steps { display: none !important; }
 body:not(.personal-net) #personal { display: none !important; }
 body.nobind #personal { display: none !important; }
+#ps-live { margin: 0 0 14px; }

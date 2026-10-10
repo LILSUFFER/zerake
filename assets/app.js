@@ -127,7 +127,7 @@
     $('noid').hidden = !!ggId;
     $('wsubmit').disabled = !ggId;
   }
-  function loadAddress() { return (net === 'TON' || net === 'GRAM') ? loadPersonal() : loadOpenRequest(); }
+  function loadAddress() { if ($('ps-live')) $('ps-live').hidden = true; watchDeposits(); return (net === 'TON' || net === 'GRAM') ? loadPersonal() : loadOpenRequest(); }
   var personalCache = {};
   async function loadPersonal() {
     var n = net;
@@ -177,6 +177,43 @@
   document.querySelectorAll('#nets button').forEach(function (b) {
     b.addEventListener('click', function () { net = b.dataset.net; applyNet(); loadAddress(); });
   });
+
+  /* live top-ups: the app notices a payment and the chips being sent without reopening */
+  var depSeen = null;
+  async function watchDeposits() {
+    if (!sb || !me || document.hidden) return;
+    var r = await sb.from('deposits').select('id,op_id,amount,coin_amount,status,network,created_at').eq('user_id', me.id).order('created_at', { ascending: false }).limit(10);
+    if (r.error || !r.data) return;
+    var now = {}, changed = false;
+    r.data.forEach(function (x) {
+      now[x.id] = x.status;
+      if (!depSeen || depSeen[x.id] === x.status) return;
+      changed = true;
+      var sum = Math.floor(Number(x.amount) * 100) / 100 + ' USDT';
+      if (x.status === 'received') { toast(t('Top-up received: ' + sum + '. Chips are on the way.', 'Пополнение получено: ' + sum + '. Фишки в пути.')); haptic('success'); }
+      else if (x.status === 'chips_sent') { toast(t('Chips credited: ' + sum, 'Фишки зачислены: ' + sum)); haptic('success'); }
+      else if (x.status === 'below_min') { toast(t('Received ' + sum + ', below the minimum. Contact support.', 'Получено ' + sum + ', меньше минимума. Напишите в поддержку.'), 'bad'); haptic('error'); }
+    });
+    depSeen = now;
+    if (changed && rows.length) loadHistory();
+    paintLive(r.data);
+  }
+  function paintLive(list) {
+    var box = $('ps-live'); if (!box) return;
+    var x = list.filter(function (d) {
+      var age = Date.now() - new Date(d.created_at).getTime();
+      return d.network === net && age < (d.status === 'chips_sent' ? 15 * 60e3 : 24 * 3600e3);
+    })[0];
+    if (!x) { box.hidden = true; return; }
+    var sum = Math.floor(Number(x.amount) * 100) / 100 + ' USDT' + (x.coin_amount ? ' (' + Number(x.coin_amount) + ' GRAM)' : '');
+    box.className = 'note' + (x.status === 'below_min' ? ' bad' : '');
+    box.innerHTML = x.status === 'chips_sent' ? bi('✓ Chips credited: ' + sum, '✓ Фишки зачислены: ' + sum)
+      : x.status === 'below_min' ? bi('Received ' + sum + ', below the minimum. Contact support.', 'Получено ' + sum + ', меньше минимума. Напишите в поддержку.')
+      : bi('Payment received: ' + sum + '. Chips are on the way…', 'Платёж получен: ' + sum + '. Фишки в пути…');
+    box.hidden = false;
+  }
+  setInterval(watchDeposits, 5000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) watchDeposits(); });
 
   var rows = [];
   async function loadHistory() {
@@ -1073,7 +1110,7 @@
     var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];
     if (go) showTab(go === 'buy' ? 'deposit' : go === 'sell' ? 'withdraw' : 'history');
     loadProfile().then(function () { loadWallets(); });
-    loadAddress(); loadLockState(); checkStaff();
+    loadAddress(); loadLockState(); checkStaff(); watchDeposits();
     setTimeout(prefetchNets, 1500);
   }).catch(function () {
     splashError('Could not sign you in. Please reopen the app.', 'Не удалось войти. Откройте приложение заново.');

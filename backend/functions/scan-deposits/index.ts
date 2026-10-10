@@ -230,7 +230,7 @@ Deno.serve(async () => {
       const p = await admin.from("profiles").select("gg_id").eq("user_id", uid).maybeSingle();
       if (d.status === "received") {
         await notifyUser(uid, msgDepositReceived(d, c.network, p.data?.gg_id));
-        await alertStaff(`💰 Top up chips: ${Math.floor(Number(d.amount) * 100) / 100} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : Number(d.amount) + " USDT"} (${c.network}) to the player's own address\nSend the chips in ClubGG, then take it and mark it as sent.${d.from_bound === false ? `\n⚠️ NOT from the player's bound wallet (from ${d.from_address}). Check before sending chips.` : ""}\n${c.explorer_tx}${d.tx_hash}`, true);
+        await alertStaff(`💰 Top up chips: ${Math.floor(Number(d.amount) * 100) / 100} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : Number(d.amount) + " USDT"} (${c.network}) to the player's own address\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
       } else {
         await notifyUser(uid, `⚠️ Получено ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : Number(d.amount) + " USDT"} — меньше минимума ($${Number(c.min_deposit)}). Напишите в поддержку.`);
         await alertStaff(`⚠️ Below the minimum: ${Number(d.amount)} USD (${c.network}) from ClubGG ID ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"} (${d.op_id}). Handle by hand.`);

@@ -135,6 +135,7 @@
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = chain; });
     document.querySelectorAll('.coinname').forEach(function (e) { e.textContent = coin; });
     $('req-net').textContent = coin + ' · ' + chain;
+    document.querySelectorAll('.mindep').forEach(function (e) { e.textContent = net === 'GRAM' ? 5 : MIN_DEPOSIT; });
     applyWallet();
     $('wmsg').hidden = true;
     feePreview();

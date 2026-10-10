@@ -553,7 +553,23 @@
     box.innerHTML =
       '<div class="row"><span>' + bi('Chips', 'Фишки') + '</span><span>' + (chips > 0 ? chips : '—') + '</span></div>' +
       '<div class="row"><span>' + bi('Network fee', 'Комиссия сети') + ' · ' + rule + '</span><span>' + (chips > 0 ? (fee ? '−' + fee : '0') : '—') + '</span></div>' +
-      '<div class="row total"><span>' + bi('You get', 'Вы получите') + '</span><b>' + (chips > 0 ? get + ' USDT' : '—') + '</b></div>';
+      '<div class="row total"><span>' + bi('You get', 'Вы получите') + '</span><b>' + (chips > 0 ? (net === 'GRAM' ? (gramRate ? '≈ ' + (Math.floor(get / gramRate * 100) / 100) + ' GRAM' : '… GRAM') : get + ' USDT') : '—') + '</b></div>' +
+      (net === 'GRAM' && gramRate ? '<div class="row"><span>' + bi('Rate now', 'Курс сейчас') + '</span><span>1 GRAM ≈ $' + gramRate.toFixed(3) + '</span></div>' : '');
+    if (net === 'GRAM' && !gramRate && !gramRateLoading) loadGramRate();
+  }
+  /* GRAM price for the cash-out preview (the server fixes the exact rate when the request is created) */
+  var gramRate = 0, gramRateLoading = false;
+  async function loadGramRate() {
+    gramRateLoading = true;
+    var urls = [['https://api.binance.com/api/v3/ticker/price?symbol=GRAMUSDT', function (d) { return d.price; }],
+                ['https://www.okx.com/api/v5/market/ticker?instId=GRAM-USDT', function (d) { return d.data && d.data[0] && d.data[0].last; }]];
+    for (var i = 0; i < urls.length && !gramRate; i++) {
+      try { var r = await fetch(urls[i][0]); var v = Number(urls[i][1](await r.json())); if (v > 0.05 && v < 1000) gramRate = v; } catch (e) {}
+    }
+    if (!gramRate && personalCache.GRAM && personalCache.GRAM.rate) gramRate = Number(personalCache.GRAM.rate);
+    gramRateLoading = false;
+    feePreview();
+    setTimeout(function () { gramRate = 0; }, 60000);   // refresh in a minute
   }
   $('wamt').addEventListener('input', feePreview);
   $('wform').addEventListener('submit', async function (e) {

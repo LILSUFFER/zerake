@@ -690,7 +690,7 @@
     var first = !curReq.paid;
     curReq.paid = true; curReq.sent = st === 'chips_sent';
     $('req-view').hidden = false; $('reqform').hidden = true;
-    $('req-view').classList.add('paid');
+    $('req-view').classList.add('paid'); $('rv-details').hidden = true;
     setState('paid');
     if (curReq.sent) {
       $('rv-paid-title').innerHTML = bi('Chips sent', 'Фишки отправлены');
@@ -707,12 +707,14 @@
     var rq = await sb.from('deposit_requests').select('status,tx_hash').eq('request_no', curReq.request_no).maybeSingle();
     if (!rq.data || rq.data.status !== 'paid') return;
     var dp = await sb.from('deposits').select('status').eq('tx_hash', rq.data.tx_hash).maybeSingle();
-    showPaid(dp.data ? dp.data.status : 'received');
+    var st = dp.data ? dp.data.status : 'received';
+    if (st === 'chips_sent' && !curReq.paid && !curReq.live) { recentPaid[net] = null; backToForm(); return; }   // old and finished: nothing to show
+    showPaid(st);
   }
   async function checkPaid() { await refreshPaid(); }
   function showRequest(r) {
-    stopReqTimers(); curReq = r;
-    $('req-view').classList.remove('paid');
+    stopReqTimers(); curReq = r; r.live = true;
+    $('req-view').classList.remove('paid'); $('rv-details').hidden = false;
     setState('open');
     $('reqform').hidden = true; $('req-view').hidden = false;
     $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.network === 'GRAM' ? String(Number(r.amount)) : r.amount;
@@ -735,7 +737,7 @@
     if (!rq && !(n in recentPaid)) {
       // the player's last request was paid recently: keep showing how far it has got
       var lr = await sb.from('deposit_requests').select('request_no,address,amount,base_amount,expires_at,status').eq('user_id', me.id).eq('network', n).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      recentPaid[n] = lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 24 * 3600 * 1000 ? lr.data : null;
+      recentPaid[n] = lr.data && lr.data.status === 'paid' && Date.now() - new Date(lr.data.expires_at).getTime() < 2 * 3600 * 1000 ? lr.data : null;
     }
     return rq;
   }

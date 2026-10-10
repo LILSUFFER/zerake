@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Zerake · Админка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/admin.css?v=1">
+</head>
+<body>
+
+<!-- sign in -->
+<section id="login" class="center" hidden>
+  <div class="box">
+    <div class="brand"><span class="logo">Z</span><b>Zerake</b><span class="tag">админка</span></div>
+    <p class="muted" id="login-text">Войдите через Telegram. Доступ есть только у владельца и менеджеров.</p>
+    <button class="btn primary big" id="login-btn" type="button">Войти через Telegram</button>
+    <p class="msg bad" id="login-msg" hidden></p>
+  </div>
+</section>
+
+<section id="loading" class="center"><div class="spinner"></div></section>
+
+<!-- the panel -->
+<div id="panel" hidden>
+  <aside class="side">
+    <div class="brand"><span class="logo">Z</span><b>Zerake</b><span class="tag">админка</span></div>
+    <nav id="nav">
+      <button data-view="queue" class="on">Очередь <span class="badge" id="b-queue" hidden></span></button>
+      <button data-view="ops">Все операции</button>
+      <button data-view="unm">Неопознанные <span class="badge" id="b-unm" hidden></span></button>
+      <button data-view="log">Журнал</button>
+      <button data-view="agent" class="owner">Агент</button>
+      <button data-view="team" class="owner">Команда и кошелёк</button>
+    </nav>
+    <div class="me">
+      <div><small class="muted">Вы вошли как</small><b id="me-name">—</b><small class="muted" id="me-role"></small></div>
+      <button class="link" id="logout" type="button">Выйти</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- queue -->
+    <section class="view" id="v-queue">
+      <header class="vh">
+        <h1>Очередь</h1>
+        <div class="stats"><span><b id="n-new">0</b> ждут</span><span><b id="n-mine">0</b> у меня</span><span class="muted" id="upd"></span></div>
+      </header>
+      <div class="cols">
+        <div>
+          <h2>Пополнения фишек <span class="muted" id="c-dep"></span></h2>
+          <div class="list" id="q-dep"></div>
+        </div>
+        <div>
+          <h2>Снятия фишек <span class="muted" id="c-wd"></span></h2>
+          <div class="list" id="q-wd"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- all operations -->
+    <section class="view" id="v-ops" hidden>
+      <header class="vh"><h1>Все операции</h1></header>
+      <form class="filters" id="ops-form" autocomplete="off">
+        <div class="seg" id="ops-kind">
+          <button type="button" data-kind="dep" class="on">Пополнения фишек</button>
+          <button type="button" data-kind="wd">Снятия фишек</button>
+        </div>
+        <select id="ops-status"></select>
+        <input id="ops-q" placeholder="DEP-… / WD-… / ClubGG ID" spellcheck="false">
+        <button class="btn" type="submit">Найти</button>
+      </form>
+      <div class="tablewrap">
+        <table class="tbl" id="ops-tbl">
+          <thead><tr><th>Операция</th><th>Создана</th><th>ClubGG ID</th><th>Сеть</th><th class="r">Сумма</th><th>Статус</th><th>Кто</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="ops-note">Показаны последние 100. Нажмите на строку, чтобы открыть подробности и сменить статус.</p>
+    </section>
+
+    <!-- unmatched -->
+    <section class="view" id="v-unm" hidden>
+      <header class="vh"><h1>Неопознанные платежи</h1></header>
+      <p class="muted">Платежи, которые не подошли ни к одной заявке. Разберите вручную и отметьте «Разобрано».</p>
+      <div class="tablewrap">
+        <table class="tbl" id="unm-tbl">
+          <thead><tr><th>Когда</th><th>Сеть</th><th class="r">Сумма</th><th>На адрес</th><th>От</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- log -->
+    <section class="view" id="v-log" hidden>
+      <header class="vh"><h1>Журнал операций</h1></header>
+      <form class="filters" id="log-form" autocomplete="off">
+        <input id="log-q" placeholder="DEP-… / WD-… / ClubGG ID" spellcheck="false">
+        <button class="btn" type="submit">Найти</button>
+      </form>
+      <div class="tablewrap">
+        <table class="tbl" id="log-tbl">
+          <thead><tr><th>Когда</th><th>Операция</th><th>Событие</th><th>ClubGG ID</th><th class="r">Сумма</th><th>Кто</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- agent -->
+    <section class="view" id="v-agent" hidden>
+      <header class="vh"><h1>Агент на Mac</h1></header>
+      <div class="grid3">
+        <div class="card"><small class="muted">Связь</small><b class="big" id="ag-alive">—</b><small class="muted" id="ag-seen"></small></div>
+        <div class="card"><small class="muted">Работа</small><b class="big" id="ag-on">—</b><button class="btn" id="ag-toggle" type="button">—</button></div>
+        <div class="card"><small class="muted">За 24 часа выдал</small><b class="big" id="ag-sum">—</b><small class="muted" id="ag-count"></small></div>
+      </div>
+      <div class="cols">
+        <div><h2>В работе у агента</h2><div class="list" id="ag-work"></div></div>
+        <div><h2>Не справился (24 ч)</h2><div class="list" id="ag-fail"></div></div>
+      </div>
+      <h2>Выдано агентом (24 ч)</h2>
+      <div class="tablewrap"><table class="tbl" id="ag-tbl"><thead><tr><th>Когда</th><th>Операция</th><th class="r">Сумма</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- team & wallet -->
+    <section class="view" id="v-team" hidden>
+      <header class="vh"><h1>Команда и кошелёк</h1></header>
+      <div class="cols">
+        <div>
+          <h2>Менеджеры</h2>
+          <div class="list" id="staff"></div>
+          <form class="filters" id="staff-form" autocomplete="off">
+            <input id="staff-user" placeholder="@username менеджера" spellcheck="false">
+            <button class="btn" type="submit">Добавить</button>
+          </form>
+          <p class="muted small">Менеджер должен хотя бы раз открыть бота @zerakebot.</p>
+        </div>
+        <div>
+          <h2>Кошелёк клуба (автовыплаты)</h2>
+          <div class="list" id="wallet"><button class="btn" id="wallet-btn" type="button">Показать балансы</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toasts"></div>
+<div id="modal" hidden><div class="mbox"><p id="m-text"></p><div class="mbtns"><button class="btn" id="m-no" type="button">Отмена</button><button class="btn primary" id="m-yes" type="button">Да</button></div></div></div>
+
+<script src="/assets/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/assets/admin.js?v=1"></script>
+</body>
+</html>

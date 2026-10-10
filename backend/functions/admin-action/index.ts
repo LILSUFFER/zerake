@@ -7,6 +7,7 @@
 //   mark_sent    -> mark one deposit "chips sent" (only the person who took it, or the owner)
 //   wqueue / wdone / wclaim / wrelease / wpaid / wreject -> cash-out requests (same idea as deposits)
 //   unmatched    -> payments no request matches;  resolve -> mark one as handled
+//   agent / agent_set -> the chip agent: alive?, today's work, on/off (owner only)
 //   ops / set_status -> every operation with search and filters; change a status by hand (owner only)
 //   staff_list / staff_add / staff_remove -> owner only
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -349,6 +350,24 @@ Deno.serve(async (req: Request) => {
     if (r.error) { console.error("set_status:", r.error.message); return out({ error: r.error.message }, 500, h); }
     if ((r.data?.length ?? 0) !== 1) return out({ error: "not found" }, 404, h);
     return out({ ok: true }, 200, h);
+  }
+
+  // ---- the chip agent on the club's Mac: is it alive, what did it do today; switch it on/off (owner only) ----
+  if (action === "agent" || action === "agent_set") {
+    if (role !== "owner") return out({ error: "owner only" }, 403, h);
+    if (action === "agent_set") {
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+      if (body.mode === "auto" || body.mode === "preview") patch.mode = body.mode;
+      const r = await admin.from("agent_settings").update(patch).eq("id", 1);
+      if (r.error) return out({ error: r.error.message }, 500, h);
+    }
+    const st = (await admin.from("agent_settings").select("enabled,mode,max_op,max_day,seen_at").eq("id", 1).maybeSingle()).data;
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const given = (await admin.from("deposits").select("op_id,amount,handled_at").eq("handled_name", "agent").gte("handled_at", since).order("handled_at", { ascending: false })).data ?? [];
+    const failed = (await admin.from("ops_log").select("op_id,row_data,at").eq("event", "agent failed").gte("at", since).order("at", { ascending: false }).limit(20)).data ?? [];
+    const inWork = (await admin.from("deposits").select("op_id,amount,claimed_at").eq("status", "received").eq("claimed_name", "agent")).data ?? [];
+    return out({ settings: st, given, failed: failed.map((f) => ({ op_id: f.op_id, at: f.at, reason: (f.row_data as Record<string, unknown> | null)?.reason ?? "" })), in_work: inWork }, 200, h);
   }
 
   if (action === "unmatched") {

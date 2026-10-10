@@ -881,7 +881,7 @@
         var why = el('div', 'note bad', ''); why.textContent = t('Auto payout did not go through: ', 'Автовыплата не прошла: ') + (w.note ? (document.body.dataset.lang === 'ru' && NOTE_RU[w.note] || w.note) : t('not started yet', 'ещё не запускалась'));
         card.appendChild(why);
         b.className = 'tbtns two';
-        b.appendChild(btn('primary', bi('Send USDT', 'Отправить USDT'), function () { wact('wretry', w.id); }));
+        b.appendChild(btn('primary', bi('Send payout', 'Отправить выплату'), function () { wact('wretry', w.id); }));
         b.appendChild(btn('', bi('I paid by hand', 'Выплатил вручную'), function () { payForm(card, w); }));
       } else if (free) b.appendChild(btn('primary', bi('Take it', 'Беру'), function () { wact('wclaim', w.id); }));
       else if (mine) {

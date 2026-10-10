@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const cfg = (await admin.from("chain_config").select("enabled,min_withdraw,max_withdraw,explorer_tx,wd_fee_fixed,wd_fee_pct").eq("network", network).maybeSingle()).data;
   if (!cfg || !cfg.enabled) return out({ error: "network disabled" }, 503, h);
-  if (Number(amount) < Number(cfg.min_withdraw)) return out({ error: "below minimum", min: cfg.min_withdraw }, 400, h);
+  if (Number(amount) < Number(cfg.min_withdraw) * (network === "GRAM" ? 0.97 : 1)) return out({ error: "below minimum", min: cfg.min_withdraw }, 400, h);   // GRAM: 3% for the rate moving
   if (Number(amount) > Number(cfg.max_withdraw)) return out({ error: "above maximum", max: cfg.max_withdraw }, 400, h);
 
   const profile = (await admin.from("profiles").select("gg_id").eq("user_id", u.user.id).maybeSingle()).data;

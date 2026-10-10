@@ -577,7 +577,7 @@
     var address = $('waddr').value.trim();
     if (!ggId) { wmsg('Add your ClubGG ID first.', 'Сначала добавьте ID в ClubGG.', true); return; }
     var minW = net === 'GRAM' ? 5 : MIN_WITHDRAW;
-    if (!(amount >= minW)) { wmsg('Minimum cash out is $' + minW + '.', 'Минимальный вывод: $' + minW + '.', true); return; }
+    if (!(amount >= minW * (net === 'GRAM' ? 0.97 : 1))) { wmsg('Minimum cash out is $' + minW + '.', 'Минимальный вывод: $' + minW + '.', true); return; }
     if (!ADDR_RE[net].test(address)) { wmsg(ADDR_HINT[net][0], ADDR_HINT[net][1], true); return; }
     if (hasPin && !sessionPin) { openLock('confirm', function (p) { if (p) $('wform').requestSubmit(); }); return; }
     $('wsubmit').disabled = true;

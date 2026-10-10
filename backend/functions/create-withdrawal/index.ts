@@ -138,22 +138,6 @@ Deno.serve(async (req: Request) => {
   if (!bound) return out({ error: "no bound wallet" }, 400, h);
   if (normAddr(network, bound.address) !== normAddr(network, address)) return out({ error: "address not allowed" }, 400, h);
 
-  // 2) Back the same way: while deposits made on other chains are not paid back yet, a chain can take
-  //    at most what was deposited on it. Winnings above all deposits may go to any bound wallet.
-  const deps = (await admin.from("deposits").select("network,amount").eq("user_id", u.user.id).in("status", ["received", "chips_sent"])).data ?? [];
-  const wds = (await admin.from("withdrawals").select("network,chips,amount").eq("user_id", u.user.id).neq("status", "rejected")).data ?? [];
-  const left: Record<string, number> = {};
-  for (const d of deps) left[CHAIN_OF[d.network]] = (left[CHAIN_OF[d.network]] ?? 0) + Number(d.amount);
-  for (const w of wds) left[CHAIN_OF[w.network]] = (left[CHAIN_OF[w.network]] ?? 0) - Number(w.chips ?? w.amount);
-  const othersLeft = Object.entries(left).filter(([c]) => c !== chain).reduce((s, [, v]) => s + Math.max(0, v), 0);
-  if (othersLeft > 0.009) {
-    const cap = Math.floor(Math.max(0, left[chain] ?? 0) * 100) / 100;
-    if (Number(amount) > cap + 0.001) {
-      const where = Object.entries(left).filter(([c, v]) => c !== chain && v > 0.009).map(([c, v]) => ({ chain: c, amount: Math.floor(v * 100) / 100 }));
-      return out({ error: "same way", cap, where }, 400, h);
-    }
-  }
-
   // A player cannot pile up requests: at most 3 waiting at once.
   const pending = await admin.from("withdrawals").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).eq("status", "pending");
   if ((pending.count ?? 0) >= 3) return out({ error: "too many pending" }, 429, h);

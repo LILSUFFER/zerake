@@ -477,7 +477,6 @@
     $('wd-wallet').textContent = w || '—'; $('waddr').value = w || '';
     $('wnoaddr').hidden = !walletsLoaded || !!w;
     $('wsubmit').disabled = !w || !ggId;
-    loadCap();
   }
   $('bindbtn').addEventListener('click', function () {
     var m = $('bindmsg'); m.hidden = true;

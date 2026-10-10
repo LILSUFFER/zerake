@@ -285,7 +285,7 @@ Deno.serve(async () => {
       const p = await admin.from("profiles").select("gg_id").eq("user_id", d.user_id).maybeSingle();
       await notifyUser(d.user_id, msgDepositReceived(d, c.network, p.data?.gg_id));
 
-      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"} (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.${d.from_bound === false ? `\n⚠️ NOT from the player's bound wallet (from ${d.from_address}). Check before sending chips.` : ""}\n${c.explorer_tx}${d.tx_hash}`, true);
+      await alertStaff(`💰 Top up chips: ${Number(req.base_amount ?? d.amount)} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : d.amount + " USDT"} (${c.network}) · request ${req.request_no}${req.status === "expired" ? " · paid after the 30 minutes" : ""}\nSend the chips in ClubGG, then take it and mark it as sent.\n${c.explorer_tx}${d.tx_hash}`, true);
     }
     let orphanNew = 0;
     if (orphans.length) {

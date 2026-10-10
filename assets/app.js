@@ -629,7 +629,6 @@
     setState('open');
     $('reqform').hidden = true; $('req-view').hidden = false;
     $('rv-no').textContent = r.request_no; $('rv-addr').textContent = r.address; $('rv-amt').textContent = r.network === 'GRAM' ? String(Number(r.amount)) : r.amount;
-    if ($('rv-no2')) $('rv-no2').textContent = r.request_no;
     if (r.network === 'GRAM') { $('rv-chips').textContent = '$' + Number(r.base_amount); $('rv-rate').textContent = r.rate ? '1 GRAM = $' + Number(r.rate).toFixed(3) : '—'; }
     renderQr(r.address); setReqStatus('wait');
     var end = new Date(r.expires_at).getTime();

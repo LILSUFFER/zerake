@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/app.css?v=36">
+<link rel="stylesheet" href="../assets/app.css?v=40">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body data-lang="en">
@@ -75,6 +75,26 @@
       <label class="chk"><input type="checkbox" id="bindok"> <span><span class="en">This is my personal wallet (not an exchange address) and I have checked it.</span><span class="ru">Это мой личный кошелёк (не адрес биржи), я его проверил.</span></span></label>
       <p class="note" id="bindmsg" hidden></p>
       <button class="btn primary" type="button" id="bindbtn"><span class="en">Bind wallet</span><span class="ru">Привязать кошелёк</span></button>
+    </div>
+
+    <!-- TON / GRAM: the player's own address, any amount -->
+    <div class="card" id="personal" hidden>
+      <div class="row">
+        <h2 class="ctitle"><span class="en">Your deposit address</span><span class="ru">Ваш адрес для пополнения</span></h2>
+        <span class="pill"><span class="coinname">USDT</span> · TON</span>
+      </div>
+      <div class="reqgrid">
+        <div class="qrbox"><div class="qr" id="ps-qr"></div><div class="qrcap"><span class="en">Scan with your wallet</span><span class="ru">Отсканируйте кошельком</span></div></div>
+        <div class="stack">
+          <div class="kv">
+            <div class="k"><span><span class="en">Address (only yours)</span><span class="ru">Адрес (только ваш)</span></span></div>
+            <div class="addrbox"><div class="addr" id="ps-addr">—</div><button class="chip" type="button" data-copy-from="ps-addr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span class="en">Copy</span><span class="ru">Копировать</span></button></div>
+          </div>
+          <div class="summary" id="ps-info"></div>
+        </div>
+      </div>
+      <p class="payhint"><span class="en">Send <b>any amount</b> of <b class="coinname">USDT</b> on the TON network to this address. No comment, no exact amount, no time limit: chips are credited automatically.</span><span class="ru">Отправьте на этот адрес <b>любую сумму</b> <b class="coinname">USDT</b> в сети TON. Без комментария, без точной суммы и без ограничения по времени: фишки зачислятся автоматически.</span></p>
+      <p class="note" id="ps-msg" hidden></p>
     </div>
 
     <div id="trc-flow" class="stack">
@@ -341,6 +361,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="../assets/config.js?v=5"></script>
-<script src="../assets/app.js?v=39"></script>
+<script src="../assets/app.js?v=40"></script>
 </body>
 </html>

@@ -7,6 +7,8 @@
 // Settings (Secrets): XPUB_TRON, XPUB_EVM (public keys). This service never holds a key that can move money.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { HDNodeWallet } from "https://esm.sh/ethers@6.13.4";
+import { WalletContractV4 } from "https://esm.sh/@ton/ton@15.1.0";
+import { mnemonicToPrivateKey } from "https://esm.sh/@ton/crypto@3.3.0";
 
 const ALLOWED = ["https://zerake.com", "https://www.zerake.com"];
 const NETWORKS = ["TRC20", "BEP20", "TON", "GRAM"];
@@ -155,6 +157,25 @@ Deno.serve(async (req: Request) => {
   // The player must bind their own wallet for this chain before the first deposit (cash outs go only there).
   const bound = (await admin.from("player_wallets").select("address").eq("user_id", u.user.id).eq("chain", CHAIN_OF[network]).maybeSingle()).data;
   if (!bound) return out({ error: "bind wallet" }, 400, h);
+
+  // TON and GRAM: a personal address (any amount, no comment, no timer). Same address for USDT-TON and GRAM.
+  if (network === "TON" || network === "GRAM") {
+    const words = (Deno.env.get("TON_MNEMONIC") ?? "").trim().split(/\s+/);
+    if (words.length !== 24) return out({ error: "not configured" }, 500, h);
+    let row = (await admin.from("ton_deposit_wallets").select("address").eq("user_id", u.user.id).maybeSingle()).data;
+    if (!row) {
+      const key = await mnemonicToPrivateKey(words);
+      const idxR = await admin.rpc("next_ton_wallet_idx");
+      if (idxR.error || idxR.data == null) { console.error("ton idx:", idxR.error?.message); return out({ error: "pool failed" }, 500, h); }
+      const w = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey, walletId: 698983191 + 1000 + Number(idxR.data) });
+      const ins = await admin.from("ton_deposit_wallets").insert({ user_id: u.user.id, idx: Number(idxR.data), address: w.address.toString({ bounceable: false }), raw: w.address.toRawString().toUpperCase() });
+      if (ins.error && !/duplicate|unique/i.test(ins.error.message)) { console.error("ton wallet:", ins.error.message); return out({ error: "pool failed" }, 500, h); }
+      row = (await admin.from("ton_deposit_wallets").select("address").eq("user_id", u.user.id).maybeSingle()).data;
+    }
+    let rate: number | null = null;
+    if (network === "GRAM") { try { rate = await gramPrice(); } catch { rate = null; } }
+    return out({ personal: { network, address: row!.address, min_usd: Number(cfg.min_deposit), rate } }, 200, h);
+  }
   if (live.data && body.fresh !== true) return out({ request: live.data, existing: true }, 200, h);
   if (live.data) await admin.from("deposit_requests").update({ status: "expired", expires_at: new Date().toISOString() }).eq("request_no", live.data.request_no);
 

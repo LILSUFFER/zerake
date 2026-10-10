@@ -126,10 +126,42 @@
     $('noid').hidden = !!ggId;
     $('wsubmit').disabled = !ggId;
   }
-  function loadAddress() { return loadOpenRequest(); }
+  function loadAddress() { return (net === 'TON' || net === 'GRAM') ? loadPersonal() : loadOpenRequest(); }
+  var personalCache = {};
+  async function loadPersonal() {
+    var n = net;
+    document.body.classList.add('personal-net');
+    stopReqTimers(); curReq = null;
+    var p = personalCache[n];
+    if (!p) {
+      var r = await callReq({ network: n });
+      if (n !== net) return;
+      if (!r.ok || !r.data.personal) {
+        var e = r.data && r.data.error;
+        if (e === 'bind wallet') { loadWallets(); return; }
+        $('ps-msg').className = 'note bad'; $('ps-msg').hidden = false;
+        $('ps-msg').innerHTML = e === 'network disabled' ? bi('This network is not available yet.', 'Эта сеть пока недоступна.') : bi('Could not get your address. Try again in a minute.', 'Не удалось получить адрес. Попробуйте через минуту.');
+        $('personal').hidden = false; return;
+      }
+      p = personalCache[n] = r.data.personal;
+    }
+    $('ps-msg').hidden = true;
+    $('ps-addr').textContent = p.address;
+    var box = $('ps-qr'); box.innerHTML = '';
+    try { var q = window.qrcode(0, 'M'); q.addData('ton://transfer/' + p.address); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (e) {}
+    var min = p.min_usd || (n === 'GRAM' ? 5 : 10);
+    $('ps-info').innerHTML = n === 'GRAM' && p.rate
+      ? '<div class="row"><span>' + bi('Minimum', 'Минимум') + '</span><span>$' + min + ' ≈ ' + (Math.ceil(min / p.rate * 100) / 100) + ' GRAM</span></div>' +
+        '<div class="row"><span>' + bi('Rate now', 'Курс сейчас') + '</span><span>1 GRAM ≈ $' + Number(p.rate).toFixed(3) + '</span></div>' +
+        '<div class="row total"><span>' + bi('Credited at', 'Зачисление по курсу') + '</span><b>' + bi('the moment it arrives', 'на момент поступления') + '</b></div>'
+      : '<div class="row"><span>' + bi('Minimum', 'Минимум') + '</span><span>' + min + ' USDT</span></div>' +
+        '<div class="row total"><span>' + bi('1 USDT', '1 USDT') + '</span><b>' + bi('= 1 chip', '= 1 фишка') + '</b></div>';
+    $('personal').hidden = false;
+  }
 
   function applyNet() {
     document.body.dataset.net = net;
+    document.body.classList.toggle('personal-net', net === 'TON' || net === 'GRAM');
     document.querySelectorAll('#nets button').forEach(function (b) { b.classList.toggle('on', b.dataset.net === net); });
     var coin = net === 'GRAM' ? 'GRAM' : 'USDT', chain = net === 'GRAM' ? 'TON' : net;
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = chain; });
@@ -461,7 +493,7 @@
         if (r.data.error === 'already bound') loadWallets();
         return;
       }
-      haptic('success'); $('bindaddr').value = ''; $('bindok').checked = false; takeState(r.data);
+      haptic('success'); $('bindaddr').value = ''; $('bindok').checked = false; takeState(r.data); if (net === 'TON' || net === 'GRAM') loadPersonal();
     });
   });
   /* how much can go back to this network now ("back the same way") */
@@ -668,7 +700,7 @@
     try { await fetchOpen(n); } catch (e) { return; }
     renderOpen(n);
   }
-  function prefetchNets() { ['TRC20', 'BEP20', 'TON', 'GRAM'].forEach(function (n) { if (n !== net) fetchOpen(n).catch(function () {}); }); }
+  function prefetchNets() { ['TRC20', 'BEP20'].forEach(function (n) { if (n !== net) fetchOpen(n).catch(function () {}); }); }
   document.querySelectorAll('[data-quick]').forEach(function (b) {
     b.addEventListener('click', function () { $('reqamt').value = b.dataset.quick; try { tg.HapticFeedback.selectionChanged(); } catch (e) {} });
   });

@@ -347,3 +347,7 @@ body[data-tab="settings"] #pinprompt, body[data-tab="settings"] #nocode, body[da
 @media (max-width: 380px) { .words { grid-template-columns: repeat(2, 1fr); } }
 
 .secret:has(.words) .sk { display: none; }
+
+body.personal-net #trc-flow, body.personal-net #tab-deposit .steps { display: none !important; }
+body:not(.personal-net) #personal { display: none !important; }
+body.nobind #personal { display: none !important; }

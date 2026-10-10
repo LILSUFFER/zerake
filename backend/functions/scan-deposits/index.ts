@@ -80,32 +80,32 @@ function parseTronList(items: Array<Record<string, unknown>>, address: string, c
     }));
 }
 /** toncenter jetton transfers -> payments to our wallet, USDT only, never failed ones. */
-function parseTonTransfers(items: Array<Record<string, unknown>>, ownerRaw: string, masterRaw: string, decimals: number): Found[] {
-  const owner = ownerRaw.toUpperCase(), master = masterRaw.toUpperCase();
+function parseTonTransfers(items: Array<Record<string, unknown>>, ownerRaw: string | Set<string>, masterRaw: string, decimals: number): Found[] {
+  const owners = typeof ownerRaw === "string" ? new Set([ownerRaw.toUpperCase()]) : ownerRaw, master = masterRaw.toUpperCase();
   return items
-    .filter((x) => !x.transaction_aborted && String(x.destination).toUpperCase() === owner && String(x.jetton_master).toUpperCase() === master)
+    .filter((x) => !x.transaction_aborted && owners.has(String(x.destination).toUpperCase()) && String(x.jetton_master).toUpperCase() === master)
     .map((x) => {
       const p = x.decoded_forward_payload as { "@type"?: string; comment?: string } | null | undefined;
       return {
         tx_hash: b64ToHex(String(x.transaction_hash)),
-        from: String(x.source),
-        to: owner,
+        from: String(x.source).toUpperCase(),
+        to: String(x.destination).toUpperCase(),
         amount: toAmount(String(x.amount), decimals),
         comment: p && p["@type"] === "text_comment" ? String(p.comment ?? "").trim() : undefined,
       };
     });
 }
 /** Plain GRAM transfers into the club wallet (toncenter v3 transactions). */
-function parseTonNative(items: Array<Record<string, any>>, ownerRaw: string): Found[] {   // deno-lint-ignore no-explicit-any
-  const owner = ownerRaw.toUpperCase();
+function parseTonNative(items: Array<Record<string, any>>, ownerRaw: string | Set<string>): Found[] {   // deno-lint-ignore no-explicit-any
+  const owners = typeof ownerRaw === "string" ? new Set([ownerRaw.toUpperCase()]) : ownerRaw;
   return items
-    .filter((t) => t.in_msg && t.in_msg.source && BigInt(t.in_msg.value ?? 0) > 0n && !t.description?.aborted && String(t.in_msg.destination ?? t.account).toUpperCase() === owner)
+    .filter((t) => t.in_msg && t.in_msg.source && BigInt(t.in_msg.value ?? 0) > 0n && !t.description?.aborted && owners.has(String(t.in_msg.destination ?? t.account).toUpperCase()))
     .map((t) => {
       const d = t.in_msg.message_content?.decoded;
       return {
         tx_hash: b64ToHex(String(t.hash)),
-        from: String(t.in_msg.source),
-        to: owner,
+        from: String(t.in_msg.source).toUpperCase(),
+        to: String(t.in_msg.destination ?? t.account).toUpperCase(),
         amount: toAmount(String(t.in_msg.value), 9),
         comment: d && d.type === "text_comment" ? String(d.comment ?? "").trim() : undefined,
       };
@@ -153,6 +153,19 @@ function msgChipsSent(d: Record<string, unknown>, gg: unknown): string {
   ].join("\n");
 }
 
+/** GRAM price in USD from public exchange tickers. */
+async function gramPrice(): Promise<number> {
+  const tries: Array<[string, (d: any) => unknown]> = [   // deno-lint-ignore no-explicit-any
+    ["https://api.binance.com/api/v3/ticker/price?symbol=GRAMUSDT", (d) => d.price],
+    ["https://www.okx.com/api/v5/market/ticker?instId=GRAM-USDT", (d) => d.data?.[0]?.last],
+    ["https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd", (d) => d["the-open-network"]?.usd],
+  ];
+  for (const [url, pick] of tries) {
+    try { const r = await fetch(url, { signal: AbortSignal.timeout(4000) }); if (!r.ok) continue; const p = Number(pick(await r.json())); if (p > 0.05 && p < 1000) return p; } catch { /* next */ }
+  }
+  throw new Error("no GRAM price");
+}
+
 const ok = (b: unknown) => new Response(JSON.stringify(b), { headers: { "Content-Type": "application/json" } });
 
 async function rpc(url: string, method: string, params: unknown[]) {
@@ -191,6 +204,40 @@ Deno.serve(async () => {
   await admin.from("deposit_requests").update({ status: "closed" }).eq("status", "expired").lt("expires_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString());
 
   /** Record payments once, link them to requests, credit pool addresses, alert staff and the player. */
+  // deno-lint-ignore no-explicit-any
+  async function processPersonal(c: Record<string, any>, found: Found[], owners: Map<string, string>) {
+    if (!found.length) return { found: 0, credited: 0 };
+    const kd = await admin.from("deposits").select("tx_hash").eq("network", c.network).in("tx_hash", found.map((f) => f.tx_hash));
+    const known = new Set((kd.data ?? []).map((r) => r.tx_hash));
+    found = found.filter((f) => !known.has(f.tx_hash));
+    let price = 0;
+    if (c.network === "GRAM" && found.length) price = await gramPrice();
+    let credited = 0;
+    for (const f of found) {
+      const uid = owners.get(f.to); if (!uid) continue;
+      const usd = c.network === "GRAM" ? Math.floor(Number(f.amount) * price * 100) / 100 : Number(f.amount);
+      const bw = (await admin.from("player_wallets").select("address").eq("user_id", uid).eq("chain", "TON").maybeSingle()).data;
+      const fromBound = !!bw && normAddr("TON", bw.address) === normAddr("TON", f.from);
+      const ins = await admin.from("deposits").upsert({
+        user_id: uid, network: c.network, tx_hash: f.tx_hash, from_address: f.from, to_address: f.to, request_id: null,
+        amount: usd.toFixed(6), coin_amount: c.network === "GRAM" ? f.amount : null, from_bound: fromBound,
+        status: usd >= Number(c.min_deposit) ? "received" : "below_min",
+      }, { onConflict: "network,tx_hash", ignoreDuplicates: true }).select("op_id,tx_hash,user_id,amount,coin_amount,status,from_bound,from_address");
+      if (ins.error) throw new Error("save: " + ins.error.message);
+      const d = ins.data?.[0]; if (!d) continue;
+      credited++;
+      const p = await admin.from("profiles").select("gg_id").eq("user_id", uid).maybeSingle();
+      if (d.status === "received") {
+        await notifyUser(uid, msgDepositReceived(d, c.network, p.data?.gg_id));
+        await alertStaff(`💰 Top up chips: ${Math.floor(Number(d.amount) * 100) / 100} USDT\nOperation: ${d.op_id}\nClubGG ID: ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"}\nPaid: ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : Number(d.amount) + " USDT"} (${c.network}) to the player's own address\nSend the chips in ClubGG, then take it and mark it as sent.${d.from_bound === false ? `\n⚠️ NOT from the player's bound wallet (from ${d.from_address}). Check before sending chips.` : ""}\n${c.explorer_tx}${d.tx_hash}`, true);
+      } else {
+        await notifyUser(uid, `⚠️ Получено ${d.coin_amount ? Number(d.coin_amount) + " GRAM" : Number(d.amount) + " USDT"} — меньше минимума ($${Number(c.min_deposit)}). Напишите в поддержку.`);
+        await alertStaff(`⚠️ Below the minimum: ${Number(d.amount)} USD (${c.network}) from ClubGG ID ${p.data?.gg_id ? fid(p.data.gg_id) : "NOT SET"} (${d.op_id}). Handle by hand.`);
+      }
+    }
+    return { found: found.length, credited };
+  }
+
   async function processFound(c: Record<string, any>, found: Found[], reqs: Req[]) {
     // The overlap window shows payments we already recorded: those are not "unidentified".
     if (found.length) {
@@ -301,27 +348,53 @@ Deno.serve(async () => {
       } else if (c.network === "TON") {
         if (!c.receive_address) { summary[c.network] = "no wallet address set"; continue; }
         scanned = 1;
-        const owner = tonToRaw(c.receive_address);
+        const owner = tonToRaw(c.receive_address).toUpperCase();
+        const pw = (await admin.from("ton_deposit_wallets").select("user_id,raw")).data ?? [];
+        const personal = new Map(pw.map((x) => [String(x.raw).toUpperCase(), x.user_id]));
+        const all = new Set([owner, ...personal.keys()]);
+        scanned = all.size;
         const sinceS = cursor ? Math.floor(cursor / 1000) - 900 : Math.floor(Date.now() / 1000) - 3600;
-        const q = new URLSearchParams({ owner_address: owner, direction: "in", jetton_master: c.usdt_contract, start_utime: String(sinceS), limit: "100", sort: "desc" });
         const headers: Record<string, string> = {};
         const key = Deno.env.get("TONCENTER_API_KEY"); if (key) headers["X-API-Key"] = key;
-        const r = await fetch(`${c.rpc_url}/api/v3/jetton/transfers?${q}`, { headers });
-        if (!r.ok) throw new Error(`toncenter ${r.status}`);
-        found = parseTonTransfers((await r.json()).jetton_transfers ?? [], owner, c.usdt_contract, c.decimals);
+        const list = [...all];
+        for (let i = 0; i < list.length; i += 100) {
+          const q = new URLSearchParams({ direction: "in", jetton_master: c.usdt_contract, start_utime: String(sinceS), limit: "500", sort: "desc" });
+          for (const a of list.slice(i, i + 100)) q.append("owner_address", a);
+          const r = await fetch(`${c.rpc_url}/api/v3/jetton/transfers?${q}`, { headers });
+          if (!r.ok) throw new Error(`toncenter ${r.status}`);
+          found = found.concat(parseTonTransfers((await r.json()).jetton_transfers ?? [], all, c.usdt_contract, c.decimals));
+          if (!key) await new Promise((res) => setTimeout(res, 1100));
+        }
+        found = found.filter((f) => !all.has(f.from));            // moves between club addresses (sweeps) are not deposits
+        const pers = await processPersonal(c, found.filter((f) => personal.has(f.to)), personal);
+        found = found.filter((f) => f.to === owner);
+        summary[c.network + "_personal"] = pers;
         newCursor = Date.now();
       } else if (c.network === "GRAM") {
         if (!c.receive_address) { summary[c.network] = "no wallet address set"; continue; }
         scanned = 1;
-        const owner = tonToRaw(c.receive_address);
+        const owner = tonToRaw(c.receive_address).toUpperCase();
+        const pw = (await admin.from("ton_deposit_wallets").select("user_id,raw")).data ?? [];
+        const personal = new Map(pw.map((x) => [String(x.raw).toUpperCase(), x.user_id]));
+        const all = new Set([owner, ...personal.keys()]);
+        scanned = all.size;
         const sinceS = cursor ? Math.floor(cursor / 1000) - 900 : Math.floor(Date.now() / 1000) - 3600;
-        const q = new URLSearchParams({ account: owner, start_utime: String(sinceS), limit: "100", sort: "desc" });
         const headers: Record<string, string> = {};
         const key = Deno.env.get("TONCENTER_API_KEY"); if (key) headers["X-API-Key"] = key;
-        await new Promise((res) => setTimeout(res, 1100));          // toncenter free plan: 1 request per second
-        const r = await fetch(`${c.rpc_url}/api/v3/transactions?${q}`, { headers });
-        if (!r.ok) throw new Error(`toncenter ${r.status}`);
-        found = parseTonNative((await r.json()).transactions ?? [], owner);
+        const list = [...all];
+        for (let i = 0; i < list.length; i += 100) {
+          if (!key) await new Promise((res) => setTimeout(res, 1100));          // toncenter free plan: 1 request per second
+          const q = new URLSearchParams({ start_utime: String(sinceS), limit: "500", sort: "desc" });
+          for (const a of list.slice(i, i + 100)) q.append("account", a);
+          const r = await fetch(`${c.rpc_url}/api/v3/transactions?${q}`, { headers });
+          if (!r.ok) throw new Error(`toncenter ${r.status}`);
+          found = found.concat(parseTonNative((await r.json()).transactions ?? [], all));
+        }
+        found = found.filter((f) => !all.has(f.from));            // sweeps and fee top-ups between club addresses
+        found = found.filter((f) => Number(f.amount) >= 0.2);   // dust (jetton notifications, bounces) is not a deposit
+        const pers = await processPersonal(c, found.filter((f) => personal.has(f.to)), personal);
+        found = found.filter((f) => f.to === owner);
+        summary[c.network + "_personal"] = pers;
         newCursor = Date.now();
       }
 

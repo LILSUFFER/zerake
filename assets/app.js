@@ -63,20 +63,17 @@
 
   /* ---------- starry sky ---------- */
   (function stars() {
-    var cv = $('stars'), ctx = cv.getContext('2d'), W, H, st = [];
-    function size() {
-      var d = window.devicePixelRatio || 1; W = innerWidth; H = innerHeight;
-      cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0);
-      st = Array.from({ length: Math.round(W * H / 9000) }, function () {
-        return { x: Math.random() * W, y: Math.random() * H, r: .5 + Math.random() * .8, a: .15 + Math.random() * .5, s: .0005 + Math.random() * .0015, p: Math.random() * 6.28 };
-      });
+    var cv = $('stars'), ctx = cv.getContext('2d'), timer;
+    function draw() {
+      var d = Math.min(window.devicePixelRatio || 1, 1.5), W = innerWidth, H = innerHeight;
+      cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0); ctx.fillStyle = '#fff';
+      for (var n = Math.round(W * H / 12000), k = 0; k < n; k++) {
+        ctx.globalAlpha = .12 + Math.random() * .45; ctx.beginPath();
+        ctx.arc(Math.random() * W, Math.random() * H, .5 + Math.random() * .8, 0, 6.2832); ctx.fill();
+      }
     }
-    function draw(ts) {
-      ctx.clearRect(0, 0, W, H);
-      st.forEach(function (o) { ctx.globalAlpha = o.a * (.55 + .45 * Math.sin(ts * o.s + o.p)); ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, 6.2832); ctx.fillStyle = '#fff'; ctx.fill(); });
-      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(draw);
-    }
-    addEventListener('resize', size); size(); requestAnimationFrame(draw);
+    addEventListener('resize', function () { clearTimeout(timer); timer = setTimeout(draw, 200); });
+    draw();
   })();
 
   /* ---------- Telegram chrome ---------- */
@@ -104,6 +101,11 @@
 
   /* ---------- sign in with Telegram initData ---------- */
   async function signIn() {
+    try {
+      var cur = (await sb.auth.getSession()).data.session;
+      var tid = tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id;
+      if (cur && tid && String(cur.user.user_metadata && cur.user.user_metadata.telegram_id) === String(tid)) return cur.user;
+    } catch (e) {}
     var r = await fetch(C.supabaseUrl + '/functions/v1/tg-webapp-auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: C.supabaseAnonKey, Authorization: 'Bearer ' + C.supabaseAnonKey },
@@ -923,7 +925,11 @@
     if (full) loadLog();
     if (staffRole === 'owner') {
       $('adm-owner').hidden = false;
-      if (full) adminCall({ action: 'wallet' }).then(function (r) {
+      if (full && !window.__showWallets && !$('adm-wallet').children.length) {
+        var wb = btn('', bi('Show club wallet balances', 'Показать балансы кошельков клуба'), function () { window.__showWallets = true; $('adm-wallet').innerHTML = ''; loadAdmin(true); });
+        $('adm-wallet').appendChild(wb);
+      }
+      if (full && window.__showWallets) adminCall({ action: 'wallet' }).then(function (r) { window.__showWallets = false;
         var box = $('adm-wallet'); if (!box || !r.ok) return; box.innerHTML = '';
         if (!r.data.ready) { box.appendChild(el('div', 'note bad', bi('Auto payout is off: the wallet key is not set on the server.', 'Автовыплаты выключены: ключ кошелька не задан на сервере.'))); return; }
         ['TRC20', 'BEP20'].forEach(function (n) {
@@ -988,7 +994,8 @@
       staffRole = r.data.role;
       $('tab-admin-btn').hidden = false; $('tabs').classList.add('has-admin');
       await loadAdmin(false);
-      admTimer = setInterval(function () { loadAdmin(false); }, 8000);
+      var tickN = 0;
+      admTimer = setInterval(function () { tickN++; if (!$('tab-admin').hidden || tickN % 4 === 0) loadAdmin(false); }, 8000);
       if (/[?&]tab=admin/.test(location.search)) showTab('admin');
     } catch (e) {}
   }
@@ -1012,13 +1019,12 @@
     var u = tg.initDataUnsafe && tg.initDataUnsafe.user;
     var nm = u ? (u.username ? '@' + u.username : (u.first_name || '')) : '';
     if (nm) { var w = $('who'); w.innerHTML = '<span class="ava"></span><span class="nm"></span>'; w.firstChild.textContent = (u.first_name || u.username || '?').charAt(0).toUpperCase(); w.lastChild.textContent = nm; }
-    return Promise.all([loadProfile(), loadAddress(), loadLockState()]).then(loadWallets);
-  }).then(function () {
     $('splash').hidden = true; $('app').hidden = false;
     var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];
     if (go) showTab(go === 'buy' ? 'deposit' : go === 'sell' ? 'withdraw' : 'history');
-    prefetchNets();
-    checkStaff();
+    loadProfile().then(function () { loadWallets(); });
+    loadAddress(); loadLockState(); checkStaff();
+    setTimeout(prefetchNets, 1500);
   }).catch(function () {
     splashError('Could not sign you in. Please reopen the app.', 'Не удалось войти. Откройте приложение заново.');
   });

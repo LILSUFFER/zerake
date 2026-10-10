@@ -150,7 +150,7 @@
     $('ps-addr').textContent = p.address;
     var box = $('ps-qr'); box.innerHTML = '';
     try { var q = window.qrcode(0, 'M'); q.addData('ton://transfer/' + p.address); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (e) {}
-    var min = p.min_usd || (n === 'GRAM' ? 5 : 10);
+    var min = p.min_usd || 1;
     $('ps-info').innerHTML = n === 'GRAM' && p.rate
       ? '<div class="row"><span>' + bi('Minimum', 'Минимум') + '</span><span>$' + min + ' ≈ ' + (Math.ceil(min / p.rate * 100) / 100) + ' GRAM</span></div>' +
         '<div class="row"><span>' + bi('Rate now', 'Курс сейчас') + '</span><span>1 GRAM ≈ $' + Number(p.rate).toFixed(3) + '</span></div>' +
@@ -168,7 +168,7 @@
     document.querySelectorAll('.netname').forEach(function (e) { e.textContent = chain; });
     document.querySelectorAll('.coinname').forEach(function (e) { e.textContent = coin; });
     $('req-net').textContent = coin + ' · ' + chain;
-    document.querySelectorAll('.mindep').forEach(function (e) { e.textContent = net === 'GRAM' ? 5 : MIN_DEPOSIT; });
+    document.querySelectorAll('.mindep').forEach(function (e) { e.textContent = (net === 'TON' || net === 'GRAM') ? 1 : MIN_DEPOSIT; });
     document.querySelectorAll('.minwd').forEach(function (e) { e.textContent = net === 'GRAM' ? 5 : MIN_WITHDRAW; });
     applyWallet();
     $('wmsg').hidden = true;

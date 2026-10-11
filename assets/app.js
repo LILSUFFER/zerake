@@ -4,7 +4,7 @@
   var MIN_DEPOSIT = C.minDeposit || 10;
   var MIN_WITHDRAW = C.minWithdraw || 10;
   var ADDR_RE = { TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/, BEP20: /^0x[0-9a-fA-F]{40}$/, TON: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/, GRAM: /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/ };
-  var PLACEHOLDER = { TRC20: 'T...', BEP20: '0x...', TON: 'UQ...', GRAM: 'UQ...' };
+  var PLACEHOLDER = { TRC20: 'Адрес кошелька T…', BEP20: 'Адрес кошелька 0x…', TON: 'Адрес кошелька UQ…', GRAM: 'Адрес кошелька UQ…' };
   var ADDR_HINT = {
     TRC20: ['Enter a valid TRC20 address (starts with T).', 'Введите корректный адрес TRC20 (начинается с T).'],
     BEP20: ['Enter a valid BEP20 address (starts with 0x).', 'Введите корректный адрес BEP20 (начинается с 0x).'],
@@ -14,7 +14,7 @@
   var WD_FEE = { TRC20: [3, 1], BEP20: [0, 0], TON: [0, 0], GRAM: [0, 0] };   // fixed USDT, percent (the server decides; this is a preview)
   function wdFee(n, chips) { var f = WD_FEE[n] || [0, 0]; return Math.ceil(Math.round((f[0] + chips * f[1] / 100) * 1e6) / 1e4) / 100; }
   var CHAIN_OF = { TRC20: 'TRON', BEP20: 'BSC', TON: 'TON', GRAM: 'TON' };
-  var CHAIN_NAME = { TRON: 'Tron (TRC20)', BSC: 'BNB Chain (BEP20)', TON: 'TON' };
+  var CHAIN_NAME = { TRON: 'Tron · TRC20', BSC: 'BNB Chain · BEP20', TON: 'TON' };
   var wallets = {}, walletsLoaded = false;
   var net = 'TRC20';
   document.body.dataset.tab = 'deposit';
@@ -521,7 +521,7 @@
     if (net === 'TON' || net === 'GRAM') a = tonNormalize(a);
     if (!ADDR_RE[net].test(a)) { m.className = 'note bad'; m.innerHTML = bi(ADDR_HINT[net][0], ADDR_HINT[net][1]); m.hidden = false; return; }
     if (!$('bindok').checked) { m.className = 'note bad'; m.innerHTML = bi('Please confirm it is your personal wallet.', 'Подтвердите, что это ваш личный кошелёк.'); m.hidden = false; return; }
-    ask('Bind ' + a + '? Cash outs on this network will go only to it. You can change it later only with your recovery code (takes 48 hours).', 'Привязать ' + a + '? Выводы в этой сети будут уходить только на него. Сменить его можно только с кодом восстановления (через 48 часов).', async function () {
+    ask('Bind ' + a + '? Chips cash-outs on this network will be paid only to it. You can change it only with your secret phrase (takes 48 hours).', 'Привязать ' + a + '? Снятие фишек в этой сети будет приходить только на него. Сменить его можно только по секретной фразе (через 48 часов).', async function () {
       $('bindbtn').disabled = true;
       var r = await walletCall({ action: 'bind', chain: CHAIN_OF[net], address: a });
       $('bindbtn').disabled = false;

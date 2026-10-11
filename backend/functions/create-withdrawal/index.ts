@@ -152,6 +152,14 @@ Deno.serve(async (req: Request) => {
     try { rate = await gramPrice(); } catch { return out({ error: "no price, try again" }, 503, h); }
     coin = (Math.floor(net / rate * 10000) / 10000).toFixed(4);
   }
+  // Can the club pay this now? Club wallets on this network minus fees minus cash outs already promised.
+  // If the balances cannot be read, the request still goes in: it is checked again before the chips are taken.
+  const chk = await fetch(Deno.env.get("SUPABASE_URL")! + "/functions/v1/send-payout", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")! },
+    body: JSON.stringify({ check: { network, amount: net.toFixed(2), coin } }),
+  }).then((r) => r.json()).catch(() => null);
+  if (chk && chk.ok === false && !chk.error) return out({ error: "network short" }, 409, h);
+
   const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2), rate, coin_amount: coin }).select("id,op_id").single();
   if (ins.error) { console.error("withdrawal insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
 

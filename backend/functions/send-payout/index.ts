@@ -395,6 +395,87 @@ async function payTon(w: any, cfg: any): Promise<Response> {
   }
 }
 
+
+// ---- can we pay? What the club wallets hold on a network, minus fees and minus cash outs already promised ----
+// Amounts are in the network's own units: USDT (6 or 18 decimals) or GRAM (9 decimals, nano).
+const TONCENTER = "https://toncenter.com/api/v3";
+function tcHeaders(): Record<string, string> { const k = Deno.env.get("TONCENTER_API_KEY"); return k ? { "X-API-Key": k } : {}; }
+// deno-lint-ignore no-explicit-any
+async function tonAddresses(cfg: any): Promise<{ address: string; club: boolean }[]> {
+  const list = [{ address: String(cfg.receive_address), club: true }];
+  for (const p of (await admin.from("ton_deposit_wallets").select("address")).data ?? []) list.push({ address: String(p.address), club: false });
+  return list;
+}
+/** Usable money on a network now: the sum over its addresses, after each address keeps what its own fee needs. */
+// deno-lint-ignore no-explicit-any
+async function holdings(network: string, cfg: any): Promise<{ units: bigint; decimals: number; addresses: number; fee_ok: boolean; fee_note: string }> {
+  if (network === "GRAM" || network === "TON") {
+    if (!cfg?.receive_address) return { units: 0n, decimals: network === "GRAM" ? 9 : 6, addresses: 0, fee_ok: false, fee_note: "club TON wallet is not set" };
+    const list = await tonAddresses(cfg);
+    const raw = new Map<string, bigint>();
+    for (let i = 0; i < list.length; i += 50) {
+      const q = new URLSearchParams(); for (const a of list.slice(i, i + 50)) q.append("address", a.address);
+      const r = await fetch(`${TONCENTER}/accountStates?${q}`, { headers: tcHeaders() });
+      if (!r.ok) throw new Error(`toncenter ${r.status}`);
+      for (const a of (await r.json()).accounts ?? []) raw.set(Address.parse(a.address).toRawString(), BigInt(a.balance ?? 0));
+    }
+    const gramOf = (a: string) => raw.get(Address.parse(a).toRawString()) ?? 0n;
+    const club = gramOf(cfg.receive_address);
+    if (network === "GRAM") {
+      let units = 0n, n = 0;
+      for (const a of list) { const u = gramOf(a.address) - (a.club ? toNano("0.1") : toNano("0.02")); if (u > 0n) { units += u; n++; } }
+      units -= toNano("0.01") * BigInt(Math.max(0, n - 1));            // merging parts onto one address costs a little gas
+      return { units: units > 0n ? units : 0n, decimals: 9, addresses: n, fee_ok: true, fee_note: "" };
+    }
+    // USDT on TON: jetton balances of every address; the club wallet pays each address's fee in GRAM (≈0.07)
+    let units = 0n, n = 0;
+    for (let i = 0; i < list.length; i += 50) {
+      const q = new URLSearchParams({ jetton_address: String(cfg.usdt_contract), limit: "100" }); for (const a of list.slice(i, i + 50)) q.append("owner_address", a.address);
+      const r = await fetch(`${TONCENTER}/jetton/wallets?${q}`, { headers: tcHeaders() });
+      if (!r.ok) throw new Error(`toncenter ${r.status}`);
+      for (const jw of (await r.json()).jetton_wallets ?? []) { const b = BigInt(jw.balance ?? 0); if (b > 0n) { units += b; n++; } }
+    }
+    const feeNeed = toNano("0.1") + toNano("0.08") * BigInt(n);
+    return { units, decimals: 6, addresses: n, fee_ok: club >= feeNeed, fee_note: club >= feeNeed ? "" : `the club TON wallet needs about ${Number(feeNeed) / 1e9} GRAM for fees` };
+  }
+  const pool = (await admin.from("address_pool").select("address,derivation_index,kind").eq("network", network)).data ?? [];
+  if (network === "TRC20") {
+    let units = 0n, n = 0;
+    if (gasfreeOn() && pool.some((p) => p.kind === "gasfree")) {
+      for (const p of pool.filter((x) => x.kind === "gasfree")) {
+        const eoa = mnOk ? await tronFromEvm(node(195, Number(p.derivation_index)).address) : null;
+        const info = eoa ? await gasfree("GET", `/api/v1/address/${eoa}`) : null;
+        const a = (info?.assets ?? []).find((x: { tokenAddress: string }) => x.tokenAddress === cfg.usdt_contract);
+        const fee = BigInt(a?.transferFee ?? 2_000_000) + (info?.active ? 0n : BigInt(a?.activateFee ?? 2_000_000));
+        const free = (await usdtBalanceOf(p.address, cfg.usdt_contract)) - BigInt(a?.frozen ?? 0) - fee;
+        if (free > 0n) { units += free; n++; }
+        await sleep(150);
+      }
+      return { units, decimals: 6, addresses: n, fee_ok: true, fee_note: "" };
+    }
+    for (const p of pool) { const b = await usdtBalanceOf(p.address, cfg.usdt_contract); if (b > 0n) { units += b; n++; } await sleep(120); }
+    const gasTrx = mnOk ? (await tronAccount(await tronFromEvm(node(195, GAS_INDEX).address), cfg.usdt_contract)).trx : 0n;
+    const ok = gasTrx >= TRX_KEEP * BigInt(Math.max(1, n));
+    return { units, decimals: 6, addresses: n, fee_ok: ok, fee_note: ok ? "" : "the TRX fee wallet is low" };
+  }
+  // BEP20
+  const provider = new JsonRpcProvider(cfg.rpc_url, 56, { staticNetwork: true });
+  const c = new Contract(cfg.usdt_contract, ERC20, provider);
+  let units = 0n, n = 0;
+  for (const x of pool) { const b = await c.balanceOf(x.address) as bigint; if (b > 0n) { units += b; n++; } }
+  const gasBnb = mnOk ? await provider.getBalance(node(60, GAS_INDEX).address) : 0n;
+  const ok = gasBnb >= BNB_KEEP * BigInt(Math.max(1, n));
+  return { units, decimals: Number(cfg.decimals), addresses: n, fee_ok: ok, fee_note: ok ? "" : "the BNB fee wallet is low" };
+}
+/** Cash outs on this network that are promised but not paid yet (in the network's units). */
+async function promised(network: string, decimals: number, exceptId: number | null): Promise<bigint> {
+  const rows = (await admin.from("withdrawals").select("id,amount,coin_amount").eq("network", network).in("status", ["pending", "approved", "sending"])).data ?? [];
+  let t = 0n;
+  for (const r of rows) if (r.id !== exceptId) t += parseUnits(String(network === "GRAM" ? r.coin_amount ?? 0 : r.amount), decimals);
+  return t;
+}
+let mnOk = false;
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return out({ error: "method" }, 405);
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -409,6 +490,43 @@ Deno.serve(async (req: Request) => {
   node = (coin: number, i: number) => HDNodeWallet.fromMnemonic(mn!, `m/44'/${coin}'/0'/0/${i}`);
   const cfgs = (await admin.from("chain_config").select("network,rpc_url,usdt_contract,decimals,auto_max,auto_daily,receive_address")).data ?? [];
   const cfgOf = (n: string) => cfgs.find((c) => c.network === n)!;
+  mnOk = !!mn;
+
+  // ---- can this cash out be paid? {check: {network, amount, coin?, except_id?}} — amount in USDT, coin in GRAM ----
+  // Counts what the club wallets hold minus fees minus every other cash out already promised on that network.
+  if (body.check && typeof body.check === "object") {
+    const c = body.check as Record<string, unknown>;
+    const network = String(c.network ?? "");
+    const cfg = cfgOf(network);
+    if (!cfg) return out({ ok: false, reason: "unknown network" });
+    try {
+      const h = await holdings(network, cfg);
+      const want = parseUnits(String(network === "GRAM" ? c.coin ?? 0 : c.amount ?? 0), h.decimals);
+      const owed = await promised(network, h.decimals, c.except_id == null ? null : Number(c.except_id));
+      const free = h.units - owed;
+      const enough = free >= want && h.fee_ok;
+      return out({ ok: enough, network, unit: network === "GRAM" ? "GRAM" : "USDT", have: formatUnits(h.units, h.decimals), promised: formatUnits(owed, h.decimals),
+        free: formatUnits(free > 0n ? free : 0n, h.decimals), want: formatUnits(want, h.decimals), fee_ok: h.fee_ok,
+        reason: enough ? null : !h.fee_ok ? h.fee_note : "not enough on the club wallets" });
+    } catch (e) {
+      return out({ ok: false, error: "could not read the balances: " + String((e as Error)?.message ?? e).slice(0, 200) });
+    }
+  }
+  // ---- what every network can pay now (for the owner's admin panel) ----
+  if (body.capacity === true) {
+    const res: Record<string, unknown> = {};
+    for (const network of ["TRC20", "BEP20", "TON", "GRAM"]) {
+      const cfg = cfgOf(network);
+      if (!cfg) continue;
+      try {
+        const h = await holdings(network, cfg);
+        const owed = await promised(network, h.decimals, null);
+        res[network] = { unit: network === "GRAM" ? "GRAM" : "USDT", have: formatUnits(h.units, h.decimals), promised: formatUnits(owed, h.decimals),
+          free: formatUnits(h.units > owed ? h.units - owed : 0n, h.decimals), short: owed > h.units, fee_ok: h.fee_ok, fee_note: h.fee_note, addresses: h.addresses };
+      } catch (e) { res[network] = { error: String((e as Error)?.message ?? e).slice(0, 200) }; }
+    }
+    return out(res);
+  }
 
   // ---- wallet overview for the owner (gas addresses, balances) ----
   if (body.info === true) {

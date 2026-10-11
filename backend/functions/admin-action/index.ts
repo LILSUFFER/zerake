@@ -244,10 +244,14 @@ Deno.serve(async (req: Request) => {
     const id = Number(body.id);
     const typed = Number(String(body.amount ?? "").replace(",", "."));
     if (!Number.isInteger(id) || !Number.isFinite(typed)) return out({ error: "bad request" }, 400, h);
-    const w0 = (await admin.from("withdrawals").select("amount,chips,status,claimed_by").eq("id", id).maybeSingle()).data;
+    const w0 = (await admin.from("withdrawals").select("amount,chips,status,claimed_by,network,coin_amount").eq("id", id).maybeSingle()).data;
     if (!w0 || w0.status !== "pending") return out({ error: "taken or already handled" }, 409, h);
     if (role !== "owner" && w0.claimed_by !== u.user.id) return out({ error: "taken or already handled" }, 409, h);
     if (Math.round(typed * 100) !== Math.round(Number(w0.chips ?? w0.amount) * 100)) return out({ error: "amount mismatch" }, 400, h);
+    // Before the chips are taken: the club wallets must be able to pay it (after fees and other promised cash outs).
+    const chk = await callPayout({ check: { network: w0.network, amount: w0.amount, coin: w0.coin_amount, except_id: id } });
+    if (chk.error) return out({ error: "balance check failed", detail: chk.error }, 503, h);
+    if (chk.ok !== true) return out({ error: "not enough funds", unit: chk.unit, free: chk.free, want: chk.want, reason: chk.reason }, 409, h);
     const r = await admin.from("withdrawals").update({ status: "approved", handled_by: u.user.id, handled_name: myName, handled_at: new Date().toISOString() })
       .eq("id", id).eq("status", "pending").select("op_id,user_id,amount,chips,fee,coin_amount,network,address");
     if (r.error || (r.data?.length ?? 0) !== 1) return out({ error: "taken or already handled" }, 409, h);
@@ -262,6 +266,10 @@ Deno.serve(async (req: Request) => {
     const id = Number(body.id);
     if (!Number.isInteger(id)) return out({ error: "bad id" }, 400, h);
     return out({ ok: true, payout: await autoPay(id) }, 200, h);
+  }
+  if (action === "capacity") {
+    if (role !== "owner") return out({ error: "owner only" }, 403, h);
+    return out(await callPayout({ capacity: true }), 200, h);
   }
   if (action === "wallet") {
     if (role !== "owner") return out({ error: "owner only" }, 403, h);

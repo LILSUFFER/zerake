@@ -259,7 +259,11 @@
       call({ action: 'wtaken', id: w.id, amount: inp.value }).then(function (r) {
         editing = 0; b.disabled = false; b.textContent = 'Подтвердить';
         if (r.ok) { var p = r.data.payout || {}; toast(p.ok ? 'Готово. Выплата отправлена автоматически.' : 'Фишки подтверждены, но автовыплата не прошла: ' + (NOTE_RU[p.reason] || p.reason || ''), !p.ok); loadQueue(); return; }
-        toast(r.data && r.data.error === 'amount mismatch' ? 'Сумма не совпадает с заявкой (' + Number(w.chips) + ').' : 'Не удалось сохранить. Повторите.', true);
+        var e = r.data || {};
+        toast(e.error === 'amount mismatch' ? 'Сумма не совпадает с заявкой (' + Number(w.chips) + ').'
+          : e.error === 'not enough funds' ? 'Не снимайте фишки: на кошельках клуба в сети ' + w.network + ' сейчас не хватает на эту выплату (свободно ' + e.free + ' ' + e.unit + ', нужно ' + e.want + ').' + (e.reason && e.reason !== 'not enough on the club wallets' ? ' ' + e.reason : '')
+          : e.error === 'balance check failed' ? 'Не удалось проверить балансы кошельков. Фишки пока не снимайте, повторите через минуту.'
+          : 'Не удалось сохранить. Повторите.', true);
       });
     }));
     c.appendChild(f); inp.focus();
@@ -463,6 +467,7 @@
 
   /* ---------- team & wallet ---------- */
   async function loadTeam() {
+    loadCapacity();
     var r = await call({ action: 'staff_list' });
     var box = $('staff'); box.innerHTML = '';
     (r.ok ? r.data.items || [] : []).forEach(function (m) {
@@ -481,6 +486,23 @@
     if (r.ok) { toast('Менеджер добавлен.'); $('staff-user').value = ''; loadTeam(); }
     else toast(r.status === 404 ? 'Не нашли такого пользователя. Пусть он сначала откроет бота @zerakebot.' : 'Не удалось добавить.', true);
   });
+  async function loadCapacity() {
+    var box = $('cap'); if (!box) return;
+    box.innerHTML = ''; box.appendChild(el('div', 'muted', 'Считаю балансы…'));
+    var r = await call({ action: 'capacity' });
+    box.innerHTML = '';
+    if (!r.ok) { box.appendChild(el('div', 'note bad', 'Не удалось получить балансы.')); return; }
+    ['TRC20', 'BEP20', 'TON', 'GRAM'].forEach(function (n) {
+      var x = r.data[n]; if (!x) return;
+      var c = el('div', 'card');
+      var top = el('div', 'qtop'); top.appendChild(el('span', 'amt', x.error ? '—' : n2(x.free) + ' ' + x.unit)); top.appendChild(el('span', 'muted', n)); c.appendChild(top);
+      if (x.error) { c.appendChild(el('div', 'note bad', x.error)); box.appendChild(c); return; }
+      c.appendChild(el('div', 'muted', 'На кошельках ' + n2(x.have) + ' ' + x.unit + ' · обещано к выплате ' + n2(x.promised) + ' · адресов с деньгами ' + x.addresses));
+      if (x.short) c.appendChild(el('div', 'note bad', 'Не хватает на уже созданные снятия. Пополните кошельки клуба в этой сети.'));
+      if (!x.fee_ok) c.appendChild(el('div', 'note warn', 'Мало на комиссии: ' + x.fee_note));
+      box.appendChild(c);
+    });
+  }
   $('wallet-btn').addEventListener('click', async function () {
     var b = $('wallet-btn'); b.disabled = true; b.textContent = 'Загружаю…';
     var r = await call({ action: 'wallet' });

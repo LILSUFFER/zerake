@@ -645,6 +645,7 @@
       else if (rd.error === 'bad amount') wmsg('Enter the amount with at most 2 decimals, for example 50 or 50.25.', 'Введите сумму не более чем с 2 знаками после точки, например 50 или 50.25.', true);
       else if (rd.error === 'above maximum') wmsg('Maximum withdrawal is ' + rd.max + ' USDT.', 'Максимальный вывод: ' + rd.max + ' USDT.', true);
       else if (rd.error === 'network disabled') wmsg('This network is not available yet.', 'Эта сеть пока недоступна.', true);
+      else if (rd.error === 'network short') wmsg('Right now we cannot pay this amount on this network. Choose another network or a smaller amount.', 'Сейчас в этой сети не получится выплатить такую сумму. Выберите другую сеть или сумму поменьше.', true);
       else if (rd.error === 'no price, try again') wmsg('Could not get the GRAM rate. Try again in a moment.', 'Не удалось получить курс GRAM. Попробуйте через минуту.', true);
       else wmsg('Could not send the request (' + (rd.error || res.status) + '). Please try again.', 'Не удалось отправить запрос (' + (rd.error || res.status) + '). Попробуйте ещё раз.', true);
       return;

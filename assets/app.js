@@ -1185,7 +1185,7 @@
     var go = (location.search.match(/[?&]go=(buy|sell|history)/) || [])[1];
     if (go) showTab(go === 'buy' ? 'deposit' : go === 'sell' ? 'withdraw' : 'history');
     loadProfile().then(function () { loadWallets(); });
-    loadAddress(); loadLockState(); checkStaff(); watchDeposits();
+    loadAddress(); loadLockState(); watchDeposits();   // staff work in the admin panel (zerake.com/admin), not here
     setTimeout(prefetchNets, 1500);
   }).catch(function () {
     splashError('Could not sign you in. Please reopen the app.', 'Не удалось войти. Откройте приложение заново.');

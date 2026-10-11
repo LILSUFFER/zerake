@@ -179,19 +179,20 @@ async function rpc(url: string, method: string, params: unknown[]) {
 Deno.serve(async () => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const staffToken = Deno.env.get("STAFF_BOT_TOKEN") || botToken;   // the staff bot; the player bot until it is set
   const summary: Record<string, unknown> = {};
 
-  async function send(chatId: number, text: string, withQueueButton = false, html = false) {
-    if (!botToken) return;
-    const markup = withQueueButton ? { inline_keyboard: [[{ text: "Open the queue", web_app: { url: "https://zerake.com/app/?tab=admin" } }]] } : undefined;
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  async function send(chatId: number, text: string, withQueueButton = false, html = false, token = botToken) {
+    if (!token) return;
+    const markup = withQueueButton ? { inline_keyboard: [[{ text: "Open the admin panel", url: "https://zerake.com/admin/" }]] } : undefined;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true, reply_markup: markup, parse_mode: html ? "HTML" : undefined }),
     }).catch(() => {});
   }
   async function alertStaff(text: string, withQueueButton = false) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
-    for (const s of staff ?? []) await send(s.telegram_id, text, withQueueButton);
+    for (const s of staff ?? []) await send(s.telegram_id, text, withQueueButton, false, staffToken);
   }
   async function notifyUser(userId: string, text: string) {
     const u = await admin.auth.admin.getUserById(userId);

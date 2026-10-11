@@ -535,7 +535,7 @@ async function tell(admin: ReturnType<typeof createClient>, userId: string, text
     body: JSON.stringify({ chat_id: Number(tid), text, parse_mode: "HTML", disable_web_page_preview: true }) }).catch(() => {});
 }
 async function alertStaff(admin: ReturnType<typeof createClient>, text: string) {
-  const bot = Deno.env.get("TELEGRAM_BOT_TOKEN"); if (!bot) return;
+  const bot = Deno.env.get("STAFF_BOT_TOKEN") || Deno.env.get("TELEGRAM_BOT_TOKEN"); if (!bot) return;
   const { data } = await admin.from("staff").select("telegram_id");
   for (const s of data ?? []) await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: s.telegram_id, text, disable_web_page_preview: true }) }).catch(() => {});

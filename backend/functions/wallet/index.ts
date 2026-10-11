@@ -68,13 +68,14 @@ const out = (b: unknown, s: number, h: Record<string, string>) => new Response(J
 
 async function tellAll(admin: ReturnType<typeof createClient>, userId: string, playerText: string, staffText: string) {
   const bot = Deno.env.get("TELEGRAM_BOT_TOKEN"); if (!bot) return;
-  const send = (chat: number, text: string) => fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+  const staffBot = Deno.env.get("STAFF_BOT_TOKEN") || bot;   // the staff bot; the player bot until it is set
+  const send = (chat: number, text: string, token = bot) => fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true }),
   }).catch(() => {});
   const tid = (await admin.auth.admin.getUserById(userId)).data?.user?.user_metadata?.telegram_id;
   if (tid) await send(Number(tid), playerText);
-  for (const s of (await admin.from("staff").select("telegram_id")).data ?? []) await send(Number(s.telegram_id), staffText);
+  for (const s of (await admin.from("staff").select("telegram_id")).data ?? []) await send(Number(s.telegram_id), staffText, staffBot);
 }
 
 Deno.serve(async (req: Request) => {

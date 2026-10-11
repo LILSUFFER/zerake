@@ -155,8 +155,8 @@ Deno.serve(async (req: Request) => {
   const ins = await admin.from("withdrawals").insert({ user_id: u.user.id, network, address, chips: amount, fee, amount: net.toFixed(2), rate, coin_amount: coin }).select("id,op_id").single();
   if (ins.error) { console.error("withdrawal insert:", ins.error.message); return out({ error: "save failed" }, 500, h); }
 
-  // Alert every manager (the queue button opens the Mini App on the managers' tab).
-  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  // Alert every manager through the staff bot (the player bot until it is set); the button opens the admin site.
+  const botToken = Deno.env.get("STAFF_BOT_TOKEN") || Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (botToken) {
     const { data: staff } = await admin.from("staff").select("telegram_id");
     const text = `💸 Cash out: ${Number(amount)} in chips (${network})\nOperation: ${ins.data.op_id}\nClubGG ID: ${fid(profile.gg_id)}\nPayout: ${net} USDT${coin ? ` = ${coin} GRAM (1 GRAM = $${rate})` : ""} (fee ${Number(fee)})\nTo: ${address}\nTake it and remove ${Number(amount)} in chips from this ID in ClubGG.`;
@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: s.telegram_id, text, disable_web_page_preview: true,
-          reply_markup: { inline_keyboard: [[{ text: "Open the queue", web_app: { url: "https://zerake.com/app/?tab=admin" } }]] } }),
+          reply_markup: { inline_keyboard: [[{ text: "Open the admin panel", url: "https://zerake.com/admin/" }]] } }),
       }).catch(() => {});
     }
   }

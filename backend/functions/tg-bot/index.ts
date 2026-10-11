@@ -4,7 +4,8 @@
 //   "Sell chips" -> https://zerake.com/app/?go=sell
 // Setup (once): open https://<project>.supabase.co/functions/v1/tg-bot?setup=1 — it points the bot's webhook here,
 // sets the commands and the menu button. Telegram's requests are checked with a secret derived from the bot token.
-// Secrets: TELEGRAM_BOT_TOKEN (already set).
+// Secrets: TELEGRAM_BOT_TOKEN (already set); SUPPORT_BOT_TOKEN adds a "Support" button.
+// This bot is for players only: staff alerts come from the staff bot, support chats go through the support bot.
 
 const APP = "https://zerake.com/app/";
 
@@ -18,12 +19,20 @@ async function tg(token: string, method: string, body: unknown) {
   });
   return await r.json().catch(() => ({}));
 }
-function keyboard(ru: boolean) {
-  return { inline_keyboard: [
+function keyboard(ru: boolean, support: string | null) {
+  const rows: unknown[][] = [
     [{ text: ru ? "🟢 Купить фишки" : "🟢 Buy chips", web_app: { url: APP + "?go=buy" } },
      { text: ru ? "🔴 Продать фишки" : "🔴 Sell chips", web_app: { url: APP + "?go=sell" } }],
     [{ text: ru ? "📜 История операций" : "📜 History", web_app: { url: APP + "?go=history" } }],
-  ] };
+  ];
+  if (support) rows.push([{ text: ru ? "💬 Поддержка" : "💬 Support", url: "https://t.me/" + support }]);
+  return { inline_keyboard: rows };
+}
+// the support bot's @username, asked from Telegram (SUPPORT_BOT_TOKEN); no button until it is set
+async function supportName(): Promise<string | null> {
+  const t = Deno.env.get("SUPPORT_BOT_TOKEN"); if (!t) return null;
+  const r = await tg(t, "getMe", {});
+  return r.ok ? r.result.username : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -50,6 +59,6 @@ Deno.serve(async (req: Request) => {
   const text = ru
     ? "Zerake — клуб без рейка.\n\nВыберите действие:"
     : "Zerake — the zero-rake club.\n\nWhat would you like to do?";
-  await tg(token, "sendMessage", { chat_id: m.chat.id, text, reply_markup: keyboard(ru) });
+  await tg(token, "sendMessage", { chat_id: m.chat.id, text, reply_markup: keyboard(ru, await supportName()) });
   return new Response("ok");
 });

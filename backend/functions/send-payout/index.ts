@@ -364,13 +364,18 @@ async function payTon(w: any, cfg: any): Promise<Response> {
     // first merge it onto the address holding the most, then pay from there.
     const target = wallets.find((x) => x.index === plan[0].index)!;
     if (plan.length > 1) {
-      for (const part of plan.slice(1)) await transfer(wallets.find((x) => x.index === part.index)!, target.contract.address, part.units, false);
+      // receiving costs the target a little gas, so each part carries a small extra when its address has it
+      for (const part of plan.slice(1)) {
+        const spare = (bal.find((b) => b.index === part.index)?.units ?? 0n) - part.units;
+        const extra = isGram ? (spare >= toNano("0.01") ? toNano("0.01") : spare > 0n ? spare : 0n) : 0n;
+        await transfer(wallets.find((x) => x.index === part.index)!, target.contract.address, part.units + extra, false);
+      }
       let ok = false;
       for (let i = 0; i < 30 && !ok; i++) {
         await sleep(3000);
         try {
           ok = isGram
-            ? (await client.getBalance(target.contract.address)) - (target.club ? toNano("0.1") : toNano("0.02")) >= need
+            ? (await client.getBalance(target.contract.address)) - (target.club ? toNano("0.05") : toNano("0.008")) >= need   // enough left for the final transfer's fee
             : (await client.runMethod(await jettonWallet(target.contract.address), "get_wallet_data")).stack.readBigNumber() >= need;
         } catch { /* retry */ }
       }

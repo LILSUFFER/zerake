@@ -2,6 +2,6 @@
   <defs><linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="0" y1="512" x2="512" y2="0">
     <stop offset="0" stop-color="#00c2b8"/><stop offset=".5" stop-color="#030403"/><stop offset=".55" stop-color="#0e0f0e"/><stop offset="1" stop-color="#00c2b8"/>
   </linearGradient></defs>
-  <rect width="512" height="512" rx="113" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
   <g fill="#ffffff" transform="translate(67.38 377.79) scale(0.34898)"><path transform="translate(0 0) scale(1 -1)" d="M27 0V112L380 597H42V710H538V598L182 113H550V0Z"/><path transform="translate(503 0) scale(1 -1)" d="M301 -12Q221 -12 162.0 22.5Q103 57 71.0 120.0Q39 183 39 267Q39 351 71.0 413.5Q103 476 161.5 511.0Q220 546 298 546Q374 546 431.5 512.0Q489 478 520.0 414.0Q551 350 551 260V231H172Q176 161 210.5 125.5Q245 90 302 90Q345 90 373.5 109.5Q402 129 413 164L544 156Q522 78 457.5 33.0Q393 -12 301 -12ZM172 317H419Q415 382 382.0 413.5Q349 445 298 445Q247 445 213.5 412.0Q180 379 172 317Z"/></g>
 </svg>
